@@ -24,8 +24,8 @@ export async function POST(req: NextRequest) {
     const normalizedKey = key.trim().toUpperCase();
 
     if (action === 'delete') {
-      const deleted = await deleteLicense(normalizedKey);
-      return NextResponse.json({ success: deleted, message: deleted ? 'Đã xóa key' : 'Không tìm thấy key' });
+      await deleteLicense(normalizedKey);
+      return NextResponse.json({ success: true, message: 'Đã xóa key thành công' });
     }
 
     const record = await getLicense(normalizedKey);

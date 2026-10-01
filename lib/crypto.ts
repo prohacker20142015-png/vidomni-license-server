@@ -87,3 +87,101 @@ export function signLicenseToken(payloadData: {
 
   return `${headerB64}.${payloadB64}.${sigB64}`;
 }
+
+const LICENSE_SECRET =
+  process.env.LICENSE_SECRET ||
+  DEFAULT_VENDOR_PRIVATE_KEY_HEX;
+
+export function generateMachineBoundKey(
+  tier: string,
+  machineId: string,
+  durationDays: number
+): string {
+  const cleanTier = tier.toUpperCase();
+  const cleanMid = (machineId || '').trim().toUpperCase();
+  if (cleanMid.length >= 4) {
+    const midPart = cleanMid.substring(0, 4);
+    const hmac = crypto
+      .createHmac('sha256', LICENSE_SECRET)
+      .update(`${cleanMid}:${cleanTier}:${durationDays}`)
+      .digest('hex')
+      .toUpperCase();
+    const sigPart = hmac.substring(0, 4);
+    return `VIDO-${cleanTier}-${midPart}-${sigPart}`;
+  } else {
+    // Nonce-based key for unassigned machine
+    const nonce = crypto.randomBytes(2).toString('hex').toUpperCase();
+    const hmac = crypto
+      .createHmac('sha256', LICENSE_SECRET)
+      .update(`UNBOUND:${nonce}:${cleanTier}:${durationDays}`)
+      .digest('hex')
+      .toUpperCase();
+    return `VIDO-${cleanTier}-${nonce}-${hmac.substring(0, 4)}`;
+  }
+}
+
+export interface RecoveredKeyData {
+  tier: 'standard' | 'pro' | 'vip';
+  durationDays: number;
+  isBound: boolean;
+  boundMachineId?: string;
+}
+
+export function verifyCryptographicKey(
+  key: string,
+  machineId: string
+): RecoveredKeyData | null {
+  const normalizedKey = key.trim().toUpperCase();
+  const cleanMid = machineId.trim().toUpperCase();
+  const parts = normalizedKey.split('-');
+  if (parts.length !== 4 || parts[0] !== 'VIDO') {
+    return null;
+  }
+
+  const rawTier = parts[1].toLowerCase();
+  const tier = (['standard', 'pro', 'vip'].includes(rawTier) ? rawTier : 'pro') as
+    | 'standard'
+    | 'pro'
+    | 'vip';
+  const midPart = parts[2];
+  const sigPart = parts[3];
+
+  const possibleDurations = [30, 365, 3650, 90, 3, 7];
+
+  // 1. Check if bound directly to this machineId
+  if (cleanMid.length >= 4 && cleanMid.startsWith(midPart)) {
+    for (const d of possibleDurations) {
+      const hmac = crypto
+        .createHmac('sha256', LICENSE_SECRET)
+        .update(`${cleanMid}:${tier.toUpperCase()}:${d}`)
+        .digest('hex')
+        .toUpperCase();
+      if (hmac.substring(0, 4) === sigPart) {
+        return {
+          tier,
+          durationDays: d,
+          isBound: true,
+          boundMachineId: cleanMid,
+        };
+      }
+    }
+  }
+
+  // 2. Check if unbound key matching nonce
+  for (const d of possibleDurations) {
+    const hmac = crypto
+      .createHmac('sha256', LICENSE_SECRET)
+      .update(`UNBOUND:${midPart}:${tier.toUpperCase()}:${d}`)
+      .digest('hex')
+      .toUpperCase();
+    if (hmac.substring(0, 4) === sigPart) {
+      return {
+        tier,
+        durationDays: d,
+        isBound: false,
+      };
+    }
+  }
+
+  return null;
+}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { listLicenses, saveLicense, LicenseRecord } from '@/lib/db';
+import { generateMachineBoundKey } from '@/lib/crypto';
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
@@ -70,28 +71,35 @@ export async function POST(req: NextRequest) {
       max_concurrent_jobs = 3,
       notes = '',
       custom_key,
+      machine_id,
+      hardware_id,
     } = body;
+
+    const rawMid = (machine_id || hardware_id || '').trim().toUpperCase();
+    const bound_machine_id = rawMid.length > 0 ? rawMid : null;
 
     let key = custom_key ? custom_key.trim().toUpperCase() : null;
     if (!key) {
-      const rand1 = crypto.randomBytes(2).toString('hex').toUpperCase();
-      const rand2 = crypto.randomBytes(2).toString('hex').toUpperCase();
-      key = `VIDO-${tier.toUpperCase()}-${rand1}-${rand2}`;
+      key = generateMachineBoundKey(tier, bound_machine_id || '', parseInt(duration_days, 10));
     }
 
     const nowIso = new Date().toISOString().replace('.000Z', 'Z');
     const record: LicenseRecord = {
       key,
       tier: tier as 'standard' | 'pro' | 'vip',
-      status: 'unused',
+      status: bound_machine_id ? 'active' : 'unused',
       duration_days: parseInt(duration_days, 10),
       max_accounts: parseInt(max_accounts, 10),
       max_concurrent_jobs: parseInt(max_concurrent_jobs, 10),
       notes: notes || '',
       created_at: nowIso,
-      bound_machine_id: null,
-      activated_at: null,
-      expires_at: null,
+      bound_machine_id: bound_machine_id,
+      activated_at: bound_machine_id ? nowIso : null,
+      expires_at: bound_machine_id
+        ? new Date((Math.floor(Date.now() / 1000) + parseInt(duration_days, 10) * 86400) * 1000)
+            .toISOString()
+            .replace('.000Z', 'Z')
+        : null,
       last_heartbeat: null,
     };
 

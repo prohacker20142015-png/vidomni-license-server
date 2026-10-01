@@ -1,25 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getLicense, saveLicense } from '@/lib/db';
+import { verifyCryptographicKey } from '@/lib/crypto';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { license_key, machine_id } = body;
+    const rawKey = body.license_key || body.key || '';
+    const rawMid = body.machine_id || body.hardware_id || '';
 
-    if (!license_key || !machine_id) {
+    if (!rawKey || !rawMid) {
       return NextResponse.json(
-        { success: false, status: 'INVALID', message: 'Missing parameters' },
+        { success: false, valid: false, status: 'INVALID', message: 'Missing license_key or machine_id' },
         { status: 400 }
       );
     }
 
-    const normalizedKey = license_key.trim().toUpperCase();
-    const normalizedMid = machine_id.trim().toUpperCase();
+    const normalizedKey = rawKey.trim().toUpperCase();
+    const normalizedMid = rawMid.trim().toUpperCase();
 
-    const record = await getLicense(normalizedKey);
+    let record = await getLicense(normalizedKey);
     if (!record) {
       return NextResponse.json(
-        { success: false, status: 'NOT_FOUND', message: 'Mã không tồn tại' },
+        {
+          success: false,
+          valid: false,
+          status: 'NOT_FOUND',
+          message: 'Mã bản quyền không tồn tại hoặc đã bị xóa bởi Quản Trị Viên!',
+        },
         { status: 404 }
       );
     }
@@ -27,20 +34,38 @@ export async function POST(req: NextRequest) {
     if (record.status === 'revoked') {
       return NextResponse.json({
         success: false,
+        valid: false,
         status: 'REVOKED',
         message: 'Bản quyền đã bị khóa bởi Admin',
       });
     }
 
+    // Ensure machine matches if key is already bound to a hardware ID
     if (record.bound_machine_id && record.bound_machine_id !== normalizedMid) {
       return NextResponse.json({
         success: false,
+        valid: false,
         status: 'MACHINE_MISMATCH',
-        message: 'Mã máy không khớp',
+        message: `Mã máy tính không khớp với thiết bị đã đăng ký! Bản quyền này chỉ dùng được trên máy: ${record.bound_machine_id.substring(0, 12)}...`,
       });
     }
 
     const nowEpoch = Math.floor(Date.now() / 1000);
+    let needsSave = false;
+
+    // If not yet bound or not yet activated
+    if (!record.bound_machine_id) {
+      record.bound_machine_id = normalizedMid;
+      needsSave = true;
+    }
+    if (record.status === 'unused' || !record.activated_at || !record.expires_at) {
+      const expiryEpoch = nowEpoch + (record.duration_days || 30) * 86400;
+      record.activated_at = new Date(nowEpoch * 1000).toISOString().replace('.000Z', 'Z');
+      record.expires_at = new Date(expiryEpoch * 1000).toISOString().replace('.000Z', 'Z');
+      record.status = 'active';
+      needsSave = true;
+    }
+
     if (record.expires_at) {
       const expiryEpoch = Math.floor(new Date(record.expires_at).getTime() / 1000);
       if (nowEpoch > expiryEpoch) {
@@ -48,26 +73,40 @@ export async function POST(req: NextRequest) {
         await saveLicense(record);
         return NextResponse.json({
           success: false,
+          valid: false,
           status: 'EXPIRED',
           message: 'Bản quyền đã hết hạn',
         });
       }
     }
 
-    record.last_heartbeat = new Date(nowEpoch * 1000).toISOString().replace('.000Z', 'Z');
-    await saveLicense(record);
+    if (needsSave) {
+      await saveLicense(record);
+    }
 
     return NextResponse.json({
       success: true,
+      valid: true,
       status: 'ACTIVE',
       tier: record.tier,
-      expires_at: record.expires_at,
+      plan_type: record.tier,
+      plan_name: (record.tier || 'pro').toUpperCase() + ' Edition',
+      customer_name: record.notes || 'Quý khách',
+      quota_remaining: (record.max_accounts || 10) * 50,
+      credits_remaining: (record.max_accounts || 10) * 50,
+      credits_total: (record.max_accounts || 10) * 50,
+      credits_used: 0,
+      license_key: record.key,
+      machine_id: record.bound_machine_id,
+      hardware_id: record.bound_machine_id,
+      expires_at: record.expires_at ? Math.floor(new Date(record.expires_at).getTime() / 1000) : 0,
       max_accounts: record.max_accounts,
       max_concurrent_jobs: record.max_concurrent_jobs,
+      message: 'Kích hoạt bản quyền thành công!',
     });
   } catch (err: any) {
     return NextResponse.json(
-      { success: false, status: 'ERROR', message: err?.message || 'Server error' },
+      { success: false, valid: false, status: 'ERROR', message: err?.message || 'Server error' },
       { status: 500 }
     );
   }

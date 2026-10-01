@@ -1,28 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getLicense, saveLicense } from '@/lib/db';
-import { signLicenseToken } from '@/lib/crypto';
+import { signLicenseToken, verifyCryptographicKey } from '@/lib/crypto';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { license_key, machine_id } = body;
+    const rawKey = body.license_key || body.key || '';
+    const rawMid = body.machine_id || body.hardware_id || '';
 
-    if (!license_key || !machine_id) {
+    if (!rawKey || !rawMid) {
       return NextResponse.json(
-        { success: false, message: 'Missing license_key or machine_id' },
+        { success: false, valid: false, message: 'Missing license_key or machine_id' },
         { status: 400 }
       );
     }
 
-    const normalizedKey = license_key.trim().toUpperCase();
-    const normalizedMid = machine_id.trim().toUpperCase();
+    const normalizedKey = rawKey.trim().toUpperCase();
+    const normalizedMid = rawMid.trim().toUpperCase();
 
-    const record = await getLicense(normalizedKey);
+    let record = await getLicense(normalizedKey);
     if (!record) {
-      return NextResponse.json(
-        { success: false, message: 'Mã bản quyền không tồn tại trên hệ thống.' },
-        { status: 404 }
-      );
+      // Cryptographic verification fallback (handles lambda cold starts and container isolation)
+      const recovered = verifyCryptographicKey(normalizedKey, normalizedMid);
+      if (recovered) {
+        const nowIso = new Date().toISOString().replace('.000Z', 'Z');
+        const expiryEpoch = Math.floor(Date.now() / 1000) + recovered.durationDays * 86400;
+        record = {
+          key: normalizedKey,
+          tier: recovered.tier,
+          status: 'active',
+          duration_days: recovered.durationDays,
+          max_accounts: recovered.tier === 'vip' ? 50 : recovered.tier === 'pro' ? 10 : 3,
+          max_concurrent_jobs: recovered.tier === 'vip' ? 10 : recovered.tier === 'pro' ? 3 : 1,
+          notes: 'Kích hoạt qua mã máy tính (Hardware ID)',
+          created_at: nowIso,
+          bound_machine_id: normalizedMid,
+          activated_at: nowIso,
+          expires_at: new Date(expiryEpoch * 1000).toISOString().replace('.000Z', 'Z'),
+          last_heartbeat: nowIso,
+        };
+        await saveLicense(record);
+      } else {
+        return NextResponse.json(
+          { success: false, message: 'Mã bản quyền không tồn tại trên hệ thống.' },
+          { status: 404 }
+        );
+      }
     }
 
     if (record.status === 'revoked') {
@@ -91,10 +114,19 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      valid: true,
       token,
       status: 'ACTIVE',
       tier: record.tier,
+      plan_type: record.tier,
+      plan_name: (record.tier || 'pro').toUpperCase() + ' Edition',
+      customer_name: record.notes || 'Quý khách',
+      quota_remaining: (record.max_accounts || 10) * 50,
+      credits_remaining: (record.max_accounts || 10) * 50,
+      credits_total: (record.max_accounts || 10) * 50,
+      credits_used: 0,
       machine_id: normalizedMid,
+      hardware_id: normalizedMid,
       license_key: record.key,
       expires_at: expiresAtIso,
       expiry_epoch: expiryEpoch,

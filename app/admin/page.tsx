@@ -55,6 +55,40 @@ export default function AdminPage() {
   const [search, setSearch] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
+
+  const generateKeyForMachine = (tier: string = 'pro', machineId: string = '') => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let r1 = '';
+    let r2 = '';
+    const cleanMid = machineId.trim().toUpperCase();
+    if (cleanMid.length >= 8) {
+      r1 = cleanMid.substring(0, 4);
+      for (let i = 0; i < 4; i++) {
+        r2 += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+    } else {
+      for (let i = 0; i < 4; i++) {
+        r1 += chars.charAt(Math.floor(Math.random() * chars.length));
+        r2 += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+    }
+    return `VIDO-${tier.toUpperCase()}-${r1}-${r2}`;
+  };
+
+  const openCreateModal = () => {
+    const randomKey = generateKeyForMachine('pro', '');
+    setCreateForm({
+      tier: 'pro',
+      duration_days: 30,
+      max_accounts: 10,
+      max_concurrent_jobs: 3,
+      notes: '',
+      custom_key: randomKey,
+      machine_id: '',
+    });
+    setShowModal(true);
+  };
 
   // Create Modal
   const [showModal, setShowModal] = useState<boolean>(false);
@@ -65,6 +99,7 @@ export default function AdminPage() {
     max_concurrent_jobs: 3,
     notes: '',
     custom_key: '',
+    machine_id: '',
   });
 
   useEffect(() => {
@@ -106,11 +141,22 @@ export default function AdminPage() {
     setKeys([]);
   };
 
-  const fetchKeys = async (authToken: string = token) => {
+  const getAuthToken = (explicitToken?: string): string => {
+    return (
+      explicitToken ||
+      token ||
+      (typeof window !== 'undefined' ? localStorage.getItem('vidomni_admin_token') : null) ||
+      'admin123'
+    );
+  };
+
+  const fetchKeys = async (authToken?: string) => {
+    const activeToken = getAuthToken(authToken);
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/keys', {
-        headers: { Authorization: `Bearer ${authToken}` },
+      const res = await fetch('/api/admin/keys?t=' + Date.now(), {
+        headers: { Authorization: `Bearer ${activeToken}` },
+        cache: 'no-store',
       });
       const data = await res.json();
       if (data.success) {
@@ -128,18 +174,24 @@ export default function AdminPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    const activeToken = getAuthToken();
     try {
       const res = await fetch('/api/admin/keys', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${activeToken}`,
         },
         body: JSON.stringify(createForm),
       });
       const data = await res.json();
       if (data.success) {
+        const createdKey = data.license?.key || createForm.custom_key;
         setShowModal(false);
+        setNewlyCreatedKey(createdKey);
+        try {
+          navigator.clipboard.writeText(createdKey);
+        } catch {}
         setCreateForm({
           tier: 'pro',
           duration_days: 30,
@@ -147,8 +199,9 @@ export default function AdminPage() {
           max_concurrent_jobs: 3,
           notes: '',
           custom_key: '',
+          machine_id: '',
         });
-        fetchKeys();
+        await fetchKeys(activeToken);
       } else {
         alert(data.message || 'Lỗi khi tạo key');
       }
@@ -158,23 +211,51 @@ export default function AdminPage() {
   };
 
   const handleAction = async (key: string, action: string, days: number = 30) => {
+    const activeToken = getAuthToken();
+
+    // Optimistic UI updates
+    if (action === 'delete') {
+      setKeys((prev) => prev.filter((k) => k.key.toUpperCase() !== key.toUpperCase()));
+      setStats((prev) => ({ ...prev, total: Math.max(0, prev.total - 1) }));
+    } else if (action === 'revoke') {
+      setKeys((prev) =>
+        prev.map((k) =>
+          k.key.toUpperCase() === key.toUpperCase() ? { ...k, status: 'revoked' as const } : k
+        )
+      );
+    } else if (action === 'unban') {
+      setKeys((prev) =>
+        prev.map((k) =>
+          k.key.toUpperCase() === key.toUpperCase() ? { ...k, status: 'active' as const } : k
+        )
+      );
+    } else if (action === 'reset_machine') {
+      setKeys((prev) =>
+        prev.map((k) =>
+          k.key.toUpperCase() === key.toUpperCase() ? { ...k, bound_machine_id: null } : k
+        )
+      );
+    }
+
     try {
       const res = await fetch('/api/admin/keys/action', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${activeToken}`,
         },
         body: JSON.stringify({ key, action, days }),
       });
       const data = await res.json();
       if (data.success) {
-        fetchKeys();
+        await fetchKeys(activeToken);
       } else {
-        alert(data.message);
+        alert(data.message || 'Lỗi thao tác');
+        await fetchKeys(activeToken);
       }
     } catch (err: any) {
-      alert('Lỗi: ' + err.message);
+      alert('Lỗi kết nối: ' + err.message);
+      await fetchKeys(activeToken);
     }
   };
 
@@ -275,7 +356,7 @@ export default function AdminPage() {
           </button>
 
           <button
-            onClick={() => setShowModal(true)}
+            onClick={openCreateModal}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-medium text-white shadow-lg shadow-blue-500/20 transition-all"
           >
             <Plus className="w-4 h-4" />
@@ -428,14 +509,25 @@ export default function AdminPage() {
                       )}
                     </td>
 
-                    <td className="py-4 px-4 font-mono text-xs text-gray-400">
+                    <td className="py-4 px-4 font-mono text-xs">
                       {item.bound_machine_id ? (
-                        <div className="flex items-center gap-1.5">
-                          <Laptop className="w-3.5 h-3.5 text-gray-400" />
-                          <span>{item.bound_machine_id}</span>
+                        <div className="flex items-center gap-1.5" title={item.bound_machine_id}>
+                          <span className="p-1 rounded bg-blue-900/30 text-blue-400 border border-blue-800/40">
+                            <Laptop className="w-3.5 h-3.5" />
+                          </span>
+                          <span className="text-gray-300 truncate max-w-[130px] font-mono text-[11px]">
+                            {item.bound_machine_id}
+                          </span>
+                          <button
+                            onClick={() => copyToClipboard(item.bound_machine_id || '')}
+                            className="p-1 text-gray-500 hover:text-blue-400 transition-colors cursor-pointer"
+                            title="Sao chép Mã Máy (Hardware ID)"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
                         </div>
                       ) : (
-                        <span className="text-gray-500 italic">Chưa khóa máy</span>
+                        <span className="text-gray-500 italic text-xs">Chưa khóa máy</span>
                       )}
                     </td>
 
@@ -546,6 +638,52 @@ export default function AdminPage() {
             </div>
 
             <form onSubmit={handleCreate} className="space-y-4 text-sm">
+              {/* Machine ID / Hardware ID Field */}
+              <div className="p-4 rounded-xl bg-blue-950/30 border border-blue-500/40 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-blue-300 uppercase tracking-wide flex items-center gap-1.5">
+                    <Laptop className="w-4 h-4 text-blue-400" />
+                    <span>Mã Máy Tính Khách Hàng (Hardware ID / Machine ID)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const clipText = await navigator.clipboard.readText();
+                        const clean = clipText.trim();
+                        if (clean) {
+                          setCreateForm((prev) => ({
+                            ...prev,
+                            machine_id: clean,
+                            custom_key: generateKeyForMachine(prev.tier, clean),
+                          }));
+                        }
+                      } catch {}
+                    }}
+                    className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1 cursor-pointer bg-blue-900/50 hover:bg-blue-800/60 px-2.5 py-1 rounded-lg border border-blue-600/40 transition-all"
+                  >
+                    📋 Dán Từ Clipboard
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Dán Hardware ID khách gửi (Ví dụ: DA6FEAE6E42F6611...)"
+                  value={createForm.machine_id}
+                  onChange={(e) => {
+                    const mid = e.target.value;
+                    setCreateForm((prev) => ({
+                      ...prev,
+                      machine_id: mid,
+                      custom_key: generateKeyForMachine(prev.tier, mid),
+                    }));
+                  }}
+                  className="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-green-300 font-mono text-xs focus:outline-none focus:border-blue-400"
+                />
+                <p className="text-[11px] text-gray-400">
+                  💡 Khách hàng mở phần mềm bấm <b>[Sao Chép]</b> mã máy rồi gửi cho bạn. Dán vào đây để hệ thống khóa cứng bản quyền cho máy đó (1 Máy - 1 Key).
+                </p>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 mb-1">
@@ -553,7 +691,14 @@ export default function AdminPage() {
                   </label>
                   <select
                     value={createForm.tier}
-                    onChange={(e) => setCreateForm({ ...createForm, tier: e.target.value })}
+                    onChange={(e) => {
+                      const newTier = e.target.value;
+                      setCreateForm({
+                        ...createForm,
+                        tier: newTier,
+                        custom_key: generateKeyForMachine(newTier, createForm.machine_id),
+                      });
+                    }}
                     className="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-blue-500"
                   >
                     <option value="standard">Standard</option>
@@ -617,16 +762,33 @@ export default function AdminPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1">
-                  Mã Tùy Chọn (Tự Đặt Hoặc Để Trống Tự Sinh)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-gray-400">
+                    Mã Bản Quyền Sẽ Tạo (License Key)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCreateForm((prev) => ({
+                        ...prev,
+                        custom_key: generateKeyForMachine(prev.tier, prev.machine_id),
+                      }))
+                    }
+                    className="text-xs text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1 cursor-pointer"
+                  >
+                    🔄 Đổi mã ngẫu nhiên khác
+                  </button>
+                </div>
                 <input
                   type="text"
-                  placeholder="Ví dụ: VIDO-VIP-KHACHHANG01"
+                  placeholder="Ví dụ: VIDO-PRO-ABCD-1234"
                   value={createForm.custom_key}
                   onChange={(e) => setCreateForm({ ...createForm, custom_key: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2.5 rounded-xl bg-gray-900 border border-blue-500/60 text-green-400 font-mono font-bold tracking-wider text-base focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
                 />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  💡 Hệ thống tự động sinh mã này theo mã máy tính của khách. Bạn có thể sửa trực tiếp nếu muốn.
+                </p>
               </div>
 
               <div>
@@ -658,6 +820,58 @@ export default function AdminPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Thông Báo Key Tạo Thành Công */}
+      {newlyCreatedKey && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="w-full max-w-md p-6 rounded-2xl bg-[#111827] border-2 border-green-500/50 shadow-2xl shadow-green-500/20 space-y-5 text-center">
+            <div className="w-14 h-14 mx-auto rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center text-green-400 text-3xl font-black">
+              ✓
+            </div>
+
+            <div>
+              <h3 className="text-xl font-extrabold text-white">Tạo Mã Bản Quyền Thành Công!</h3>
+              <p className="text-xs text-gray-400 mt-1">
+                Dưới đây là mã License Key bạn vừa tạo. Hãy sao chép và gửi cho khách hàng:
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-gray-900 border border-green-500/40">
+              <div className="font-mono text-xl font-black text-green-400 tracking-wider select-all break-all">
+                {newlyCreatedKey}
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => copyToClipboard(newlyCreatedKey)}
+                className="flex-1 py-3 rounded-xl bg-green-600 hover:bg-green-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-green-600/30 transition-all text-sm"
+              >
+                {copiedKey === newlyCreatedKey ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>✓ Đã Copy Vào Clipboard!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span>📋 Sao Chép Mã Key Này</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setNewlyCreatedKey(null)}
+                className="px-5 py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium text-sm transition-all"
+              >
+                Đóng
+              </button>
+            </div>
           </div>
         </div>
       )}
