@@ -23,6 +23,8 @@ export interface LicenseRecord {
   activated_at: string | null;
   expires_at: string | null;
   last_heartbeat: string | null;
+  customer_email?: string | null;
+  customer_phone?: string | null;
 }
 
 // 1. Initialize Upstash Redis if environment variables are provided

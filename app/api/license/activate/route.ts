@@ -10,7 +10,45 @@ export async function POST(req: NextRequest) {
 
     if (!rawKey || !rawMid) {
       return NextResponse.json(
-        { success: false, valid: false, message: 'Missing license_key or machine_id' },
+        { success: false, valid: false, message: 'Thiếu mã bản quyền (license_key) hoặc mã máy (machine_id).' },
+        { status: 400 }
+      );
+    }
+
+    const rawEmail = (body.customer_email || body.email || '').trim();
+    const rawPhone = (body.customer_phone || body.phone || body.sdt || '').trim();
+
+    // Bắt buộc khách hàng phải nhập SĐT và Email
+    if (!rawPhone || !rawEmail) {
+      return NextResponse.json(
+        {
+          success: false,
+          valid: false,
+          message: 'Bắt buộc phải nhập đầy đủ Số điện thoại và Email để kích hoạt bản quyền!',
+        },
+        { status: 400 }
+      );
+    }
+
+    const phoneDigits = rawPhone.replace(/\D/g, '');
+    if (phoneDigits.length < 9 || phoneDigits.length > 15) {
+      return NextResponse.json(
+        {
+          success: false,
+          valid: false,
+          message: 'Số điện thoại không hợp lệ (cần từ 9 - 15 chữ số)!',
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!rawEmail.includes('@') || !rawEmail.includes('.')) {
+      return NextResponse.json(
+        {
+          success: false,
+          valid: false,
+          message: 'Email không hợp lệ (ví dụ: customer@gmail.com)!',
+        },
         { status: 400 }
       );
     }
@@ -38,6 +76,8 @@ export async function POST(req: NextRequest) {
           activated_at: nowIso,
           expires_at: new Date(expiryEpoch * 1000).toISOString().replace('.000Z', 'Z'),
           last_heartbeat: nowIso,
+          customer_email: rawEmail,
+          customer_phone: rawPhone,
         };
         await saveLicense(record);
       } else {
@@ -95,6 +135,8 @@ export async function POST(req: NextRequest) {
       record.status = 'active';
     }
 
+    record.customer_email = rawEmail;
+    record.customer_phone = rawPhone;
     record.last_heartbeat = new Date(nowEpoch * 1000).toISOString().replace('.000Z', 'Z');
     await saveLicense(record);
 
@@ -121,6 +163,8 @@ export async function POST(req: NextRequest) {
       plan_type: record.tier,
       plan_name: (record.tier || 'pro').toUpperCase() + ' Edition',
       customer_name: record.notes || 'Quý khách',
+      customer_email: record.customer_email,
+      customer_phone: record.customer_phone,
       quota_remaining: (record.max_accounts || 10) * 50,
       credits_remaining: (record.max_accounts || 10) * 50,
       credits_total: (record.max_accounts || 10) * 50,

@@ -85,6 +85,8 @@ export async function POST(req: NextRequest) {
       custom_key,
       machine_id,
       hardware_id,
+      customer_email,
+      customer_phone,
     } = body;
 
     const rawMid = (machine_id || hardware_id || '').trim().toUpperCase();
@@ -113,6 +115,8 @@ export async function POST(req: NextRequest) {
             .replace('.000Z', 'Z')
         : null,
       last_heartbeat: null,
+      customer_email: customer_email ? customer_email.trim() : null,
+      customer_phone: customer_phone ? customer_phone.trim() : null,
     };
 
     await saveLicense(record);

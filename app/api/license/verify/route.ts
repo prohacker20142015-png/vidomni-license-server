@@ -50,8 +50,62 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const rawEmail = (body.customer_email || body.email || '').trim();
+    const rawPhone = (body.customer_phone || body.phone || body.sdt || '').trim();
+
+    const isFirstActivation = record.status === 'unused' || !record.bound_machine_id || Boolean(body.is_activating);
+
+    // Khi kích hoạt (lần đầu hoặc khi người dùng nhập form kích hoạt), bắt buộc phải có SĐT và Email
+    if (isFirstActivation) {
+      if (!rawPhone || !rawEmail) {
+        return NextResponse.json(
+          {
+            success: false,
+            valid: false,
+            status: 'MISSING_CONTACT',
+            message: 'Bắt buộc phải nhập đầy đủ Số điện thoại và Email để kích hoạt bản quyền!',
+          },
+          { status: 400 }
+        );
+      }
+
+      const phoneDigits = rawPhone.replace(/\D/g, '');
+      if (phoneDigits.length < 9 || phoneDigits.length > 15) {
+        return NextResponse.json(
+          {
+            success: false,
+            valid: false,
+            status: 'INVALID_CONTACT',
+            message: 'Số điện thoại không hợp lệ (cần từ 9 - 15 chữ số)!',
+          },
+          { status: 400 }
+        );
+      }
+
+      if (!rawEmail.includes('@') || !rawEmail.includes('.')) {
+        return NextResponse.json(
+          {
+            success: false,
+            valid: false,
+            status: 'INVALID_CONTACT',
+            message: 'Email không hợp lệ (ví dụ: customer@gmail.com)!',
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     const nowEpoch = Math.floor(Date.now() / 1000);
     let needsSave = false;
+
+    if (rawPhone && record.customer_phone !== rawPhone) {
+      record.customer_phone = rawPhone;
+      needsSave = true;
+    }
+    if (rawEmail && record.customer_email !== rawEmail) {
+      record.customer_email = rawEmail;
+      needsSave = true;
+    }
 
     // If not yet bound or not yet activated
     if (!record.bound_machine_id) {
@@ -92,6 +146,8 @@ export async function POST(req: NextRequest) {
       plan_type: record.tier,
       plan_name: (record.tier || 'pro').toUpperCase() + ' Edition',
       customer_name: record.notes || 'Quý khách',
+      customer_email: record.customer_email || null,
+      customer_phone: record.customer_phone || null,
       quota_remaining: (record.max_accounts || 10) * 50,
       credits_remaining: (record.max_accounts || 10) * 50,
       credits_total: (record.max_accounts || 10) * 50,

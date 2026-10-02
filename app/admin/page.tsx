@@ -20,6 +20,8 @@ import {
   AlertCircle,
   Clock,
   Sparkles,
+  Phone,
+  Mail,
 } from 'lucide-react';
 
 interface LicenseRecord {
@@ -35,6 +37,8 @@ interface LicenseRecord {
   activated_at: string | null;
   expires_at: string | null;
   last_heartbeat: string | null;
+  customer_email?: string | null;
+  customer_phone?: string | null;
 }
 
 export default function AdminPage() {
@@ -86,6 +90,8 @@ export default function AdminPage() {
       notes: '',
       custom_key: randomKey,
       machine_id: '',
+      customer_phone: '',
+      customer_email: '',
     });
     setShowModal(true);
   };
@@ -100,6 +106,8 @@ export default function AdminPage() {
     notes: '',
     custom_key: '',
     machine_id: '',
+    customer_phone: '',
+    customer_email: '',
   });
 
   useEffect(() => {
@@ -204,6 +212,8 @@ export default function AdminPage() {
           notes: '',
           custom_key: '',
           machine_id: '',
+          customer_phone: '',
+          customer_email: '',
         });
         await fetchKeys(activeToken);
       } else {
@@ -282,10 +292,14 @@ export default function AdminPage() {
 
   // Filter keys
   const filteredKeys = keys.filter((k) => {
+    const q = search.toLowerCase();
     const matchSearch =
-      k.key.toLowerCase().includes(search.toLowerCase()) ||
-      (k.bound_machine_id && k.bound_machine_id.toLowerCase().includes(search.toLowerCase())) ||
-      (k.notes && k.notes.toLowerCase().includes(search.toLowerCase()));
+      !q ||
+      k.key.toLowerCase().includes(q) ||
+      (k.bound_machine_id && k.bound_machine_id.toLowerCase().includes(q)) ||
+      (k.notes && k.notes.toLowerCase().includes(q)) ||
+      (k.customer_phone && k.customer_phone.toLowerCase().includes(q)) ||
+      (k.customer_email && k.customer_email.toLowerCase().includes(q));
 
     if (!matchSearch) return false;
 
@@ -447,26 +461,27 @@ export default function AdminPage() {
           <table className="w-full text-left text-sm text-gray-300">
             <thead className="bg-gray-900/80 text-xs uppercase text-gray-400 border-b border-gray-800">
               <tr>
-                <th className="py-4 px-6">Mã Bản Quyền (License Key)</th>
-                <th className="py-4 px-4">Gói (Tier)</th>
-                <th className="py-4 px-4">Trạng Thái</th>
-                <th className="py-4 px-4">Mã Máy Đã Khóa</th>
-                <th className="py-4 px-4">Hạn Dùng / Hết Hạn</th>
-                <th className="py-4 px-4">Ghi Chú Khách Hàng</th>
-                <th className="py-4 px-6 text-right">Thao Tác</th>
+                <th className="py-4 px-5">Mã Bản Quyền (License Key)</th>
+                <th className="py-4 px-3">Gói</th>
+                <th className="py-4 px-3">Trạng Thái</th>
+                <th className="py-4 px-4">Khách Hàng (SĐT / Email)</th>
+                <th className="py-4 px-3">Mã Máy Đã Khóa</th>
+                <th className="py-4 px-3">Hạn Dùng / Hết Hạn</th>
+                <th className="py-4 px-3">Ghi Chú</th>
+                <th className="py-4 px-5 text-right">Thao Tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800/60">
               {filteredKeys.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-gray-500">
+                  <td colSpan={8} className="py-12 text-center text-gray-500">
                     Chưa có mã bản quyền nào phù hợp. Bấm &quot;Tạo Key Mới&quot; để bắt đầu.
                   </td>
                 </tr>
               ) : (
                 filteredKeys.map((item) => (
                   <tr key={item.key} className="hover:bg-gray-800/30 transition-colors">
-                    <td className="py-4 px-6 font-mono text-sm font-semibold text-white">
+                    <td className="py-4 px-5 font-mono text-sm font-semibold text-white">
                       <div className="flex items-center gap-2">
                         <span>{item.key}</span>
                         <button
@@ -483,7 +498,7 @@ export default function AdminPage() {
                       </div>
                     </td>
 
-                    <td className="py-4 px-4">
+                    <td className="py-4 px-3">
                       <span
                         className={`text-xs px-2.5 py-1 rounded-full font-semibold uppercase ${
                           item.tier === 'vip'
@@ -497,7 +512,7 @@ export default function AdminPage() {
                       </span>
                     </td>
 
-                    <td className="py-4 px-4">
+                    <td className="py-4 px-3">
                       {item.status === 'active' && (
                         <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
                           <CheckCircle2 className="w-3.5 h-3.5" />
@@ -521,6 +536,59 @@ export default function AdminPage() {
                           <Clock className="w-3.5 h-3.5" />
                           <span>HẾT HẠN</span>
                         </span>
+                      )}
+                    </td>
+
+                    <td className="py-4 px-4">
+                      {item.customer_phone || item.customer_email ? (
+                        <div className="space-y-1">
+                          {item.customer_phone && (
+                            <div className="flex items-center gap-1.5" title={`SĐT: ${item.customer_phone}`}>
+                              <Phone className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                              <a
+                                href={`tel:${item.customer_phone}`}
+                                className="font-mono text-xs font-bold text-blue-300 hover:underline hover:text-blue-200"
+                              >
+                                {item.customer_phone}
+                              </a>
+                              <button
+                                onClick={() => copyToClipboard(item.customer_phone!)}
+                                className="p-0.5 text-gray-500 hover:text-blue-300"
+                                title="Copy Số điện thoại"
+                              >
+                                {copiedKey === item.customer_phone ? (
+                                  <Check className="w-3 h-3 text-green-400" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </button>
+                            </div>
+                          )}
+                          {item.customer_email && (
+                            <div className="flex items-center gap-1.5" title={`Email: ${item.customer_email}`}>
+                              <Mail className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                              <a
+                                href={`mailto:${item.customer_email}`}
+                                className="text-xs text-gray-300 hover:underline hover:text-white truncate max-w-[150px]"
+                              >
+                                {item.customer_email}
+                              </a>
+                              <button
+                                onClick={() => copyToClipboard(item.customer_email!)}
+                                className="p-0.5 text-gray-500 hover:text-emerald-300"
+                                title="Copy Email"
+                              >
+                                {copiedKey === item.customer_email ? (
+                                  <Check className="w-3 h-3 text-green-400" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-500 italic text-xs">Chưa có thông tin</span>
                       )}
                     </td>
 
@@ -804,6 +872,37 @@ export default function AdminPage() {
                 <p className="text-[11px] text-gray-400 mt-1">
                   💡 Hệ thống tự động sinh mã này theo mã máy tính của khách. Bạn có thể sửa trực tiếp nếu muốn.
                 </p>
+              </div>
+
+              {/* Customer Contact Info (Phone & Email) */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1">
+                    <Phone className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Số Điện Thoại Khách (Tùy chọn)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ví dụ: 0987654321"
+                    value={createForm.customer_phone}
+                    onChange={(e) => setCreateForm({ ...createForm, customer_phone: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white font-mono text-xs focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1">
+                    <Mail className="w-3.5 h-3.5 text-green-400" />
+                    <span>Email Khách (Tùy chọn)</span>
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="khachhang@gmail.com"
+                    value={createForm.customer_email}
+                    onChange={(e) => setCreateForm({ ...createForm, customer_email: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white text-xs focus:outline-none focus:border-blue-500"
+                  />
+                </div>
               </div>
 
               <div>
