@@ -129,12 +129,25 @@ async function persistToBlob(store: Record<string, LicenseRecord>): Promise<void
   if (!token) return;
 
   try {
-    await put(BLOB_FILENAME, JSON.stringify(store, null, 2), {
-      access: 'public',
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      token,
-    });
+    try {
+      await put(BLOB_FILENAME, JSON.stringify(store, null, 2), {
+        access: 'private',
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        token,
+      });
+    } catch (privErr: any) {
+      if (privErr?.message?.includes('public access')) {
+        await put(BLOB_FILENAME, JSON.stringify(store, null, 2), {
+          access: 'public',
+          addRandomSuffix: false,
+          allowOverwrite: true,
+          token,
+        });
+      } else {
+        throw privErr;
+      }
+    }
     lastBlobSync = Date.now();
   } catch (err) {
     console.error('[DB] Error persisting to Vercel Blob:', err);
