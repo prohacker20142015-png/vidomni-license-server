@@ -95,17 +95,25 @@ async function syncFromBlob(force: boolean = false): Promise<Record<string, Lice
   }
 
   const now = Date.now();
-  if (!force && now - lastBlobSync < 3000 && Object.keys(memoryStore).length > 0) {
+  if (!force && now - lastBlobSync < 1500 && Object.keys(memoryStore).length > 0) {
     return memoryStore;
   }
 
   try {
-    const { blobs } = await list({ prefix: BLOB_FILENAME, token });
+    const { blobs } = await list({ prefix: 'vidomni_licenses', token });
     if (blobs && blobs.length > 0) {
-      const blobTarget = blobs[0];
+      // Sort newest first to always read latest authoritative version
+      const sorted = blobs.sort(
+        (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+      );
+      const blobTarget = sorted[0];
       const fetchUrl = `${blobTarget.url}${blobTarget.url.includes('?') ? '&' : '?'}t=${Date.now()}`;
       const res = await fetch(fetchUrl, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
         cache: 'no-store',
       });
       if (res.ok) {
@@ -129,26 +137,40 @@ async function persistToBlob(store: Record<string, LicenseRecord>): Promise<void
   if (!token) return;
 
   try {
+    // 1. List existing blobs to delete later
+    let oldUrls: string[] = [];
     try {
-      await put(BLOB_FILENAME, JSON.stringify(store, null, 2), {
+      const { blobs } = await list({ prefix: 'vidomni_licenses', token });
+      if (blobs && blobs.length > 0) {
+        oldUrls = blobs.map((b) => b.url);
+      }
+    } catch {}
+
+    // 2. Put new blob with unique suffix so URL is never cached by edge CDN
+    try {
+      await put('vidomni_licenses.json', JSON.stringify(store, null, 2), {
         access: 'private',
-        addRandomSuffix: false,
-        allowOverwrite: true,
+        addRandomSuffix: true,
         token,
       });
     } catch (privErr: any) {
       if (privErr?.message?.includes('public access')) {
-        await put(BLOB_FILENAME, JSON.stringify(store, null, 2), {
+        await put('vidomni_licenses.json', JSON.stringify(store, null, 2), {
           access: 'public',
-          addRandomSuffix: false,
-          allowOverwrite: true,
+          addRandomSuffix: true,
           token,
         });
       } else {
         throw privErr;
       }
     }
+
     lastBlobSync = Date.now();
+
+    // 3. Clean up older blobs in background
+    if (oldUrls.length > 0) {
+      del(oldUrls, { token }).catch(() => {});
+    }
   } catch (err) {
     console.error('[DB] Error persisting to Vercel Blob:', err);
   }
