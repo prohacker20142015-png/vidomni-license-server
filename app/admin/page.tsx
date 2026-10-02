@@ -155,7 +155,11 @@ export default function AdminPage() {
     setLoading(true);
     try {
       const res = await fetch('/api/admin/keys?t=' + Date.now(), {
-        headers: { Authorization: `Bearer ${activeToken}` },
+        headers: {
+          Authorization: `Bearer ${activeToken}`,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
         cache: 'no-store',
       });
       const data = await res.json();
@@ -212,27 +216,38 @@ export default function AdminPage() {
 
   const handleAction = async (key: string, action: string, days: number = 30) => {
     const activeToken = getAuthToken();
+    const upperKey = key.trim().toUpperCase();
 
     // Optimistic UI updates
     if (action === 'delete') {
-      setKeys((prev) => prev.filter((k) => k.key.toUpperCase() !== key.toUpperCase()));
+      setKeys((prev) => prev.filter((k) => k.key.toUpperCase() !== upperKey));
       setStats((prev) => ({ ...prev, total: Math.max(0, prev.total - 1) }));
     } else if (action === 'revoke') {
       setKeys((prev) =>
         prev.map((k) =>
-          k.key.toUpperCase() === key.toUpperCase() ? { ...k, status: 'revoked' as const } : k
+          k.key.toUpperCase() === upperKey ? { ...k, status: 'revoked' as const } : k
         )
       );
+      setStats((prev) => ({
+        ...prev,
+        active: Math.max(0, prev.active - 1),
+        revoked: prev.revoked + 1,
+      }));
     } else if (action === 'unban') {
       setKeys((prev) =>
         prev.map((k) =>
-          k.key.toUpperCase() === key.toUpperCase() ? { ...k, status: 'active' as const } : k
+          k.key.toUpperCase() === upperKey ? { ...k, status: 'active' as const } : k
         )
       );
+      setStats((prev) => ({
+        ...prev,
+        active: prev.active + 1,
+        revoked: Math.max(0, prev.revoked - 1),
+      }));
     } else if (action === 'reset_machine') {
       setKeys((prev) =>
         prev.map((k) =>
-          k.key.toUpperCase() === key.toUpperCase() ? { ...k, bound_machine_id: null } : k
+          k.key.toUpperCase() === upperKey ? { ...k, bound_machine_id: null } : k
         )
       );
     }
@@ -244,18 +259,18 @@ export default function AdminPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${activeToken}`,
         },
-        body: JSON.stringify({ key, action, days }),
+        body: JSON.stringify({ key: upperKey, action, days }),
       });
       const data = await res.json();
-      if (data.success) {
-        await fetchKeys(activeToken);
-      } else {
+      if (!data.success) {
         alert(data.message || 'Lỗi thao tác');
-        await fetchKeys(activeToken);
       }
     } catch (err: any) {
       alert('Lỗi kết nối: ' + err.message);
-      await fetchKeys(activeToken);
+    } finally {
+      setTimeout(() => {
+        fetchKeys(activeToken);
+      }, 400);
     }
   };
 

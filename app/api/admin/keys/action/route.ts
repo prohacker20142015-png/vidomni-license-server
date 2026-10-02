@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getLicense, saveLicense, deleteLicense } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
 function checkAuth(req: NextRequest): boolean {

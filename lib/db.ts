@@ -130,7 +130,7 @@ async function persistToBlob(store: Record<string, LicenseRecord>): Promise<void
 
   try {
     await put(BLOB_FILENAME, JSON.stringify(store, null, 2), {
-      access: 'private',
+      access: 'public',
       addRandomSuffix: false,
       allowOverwrite: true,
       token,
@@ -152,7 +152,7 @@ export async function getLicense(key: string): Promise<LicenseRecord | null> {
   if (redisClient) {
     try {
       const record = await redisClient.get<LicenseRecord>(`license:${normalizedKey}`);
-      if (record) return record;
+      return record || null;
     } catch (err) {
       console.error('[DB] Redis get error:', err);
     }
@@ -199,7 +199,6 @@ export async function saveLicense(record: LicenseRecord): Promise<void> {
     memoryStore = store;
     writeLocalDiskStore(memoryStore);
     await persistToBlob(memoryStore);
-    return;
   }
 
   // 3. Local memory & disk
@@ -222,33 +221,31 @@ export async function deleteLicense(key: string): Promise<boolean> {
 
   // 2. Vercel Blob Cloud
   if (process.env.BLOB_READ_WRITE_TOKEN) {
-    const store = await syncFromBlob(true);
-    let existed = false;
-    for (const k of Object.keys(store)) {
-      if (k.trim().toUpperCase() === normalizedKey) {
-        delete store[k];
-        existed = true;
+    try {
+      const store = await syncFromBlob(true);
+      for (const k of Object.keys(store)) {
+        if (k.trim().toUpperCase() === normalizedKey) {
+          delete store[k];
+        }
       }
+      memoryStore = store;
+      writeLocalDiskStore(memoryStore);
+      await persistToBlob(memoryStore);
+    } catch (err) {
+      console.error('[DB] Error deleting from Blob:', err);
     }
-    memoryStore = store;
-    writeLocalDiskStore(memoryStore);
-    await persistToBlob(memoryStore);
-    return true; // Always return true so frontend refreshes cleanly
   }
 
   // 3. Local memory & disk
-  let existed = false;
   for (const k of Object.keys(memoryStore)) {
     if (k.trim().toUpperCase() === normalizedKey) {
       delete memoryStore[k];
-      existed = true;
     }
   }
   const diskStore = readLocalDiskStore();
   for (const k of Object.keys(diskStore)) {
     if (k.trim().toUpperCase() === normalizedKey) {
       delete diskStore[k];
-      existed = true;
     }
   }
   writeLocalDiskStore(memoryStore);
@@ -267,9 +264,9 @@ export async function listLicenses(): Promise<LicenseRecord[]> {
           pipeline.get(`license:${k}`);
         }
         const records = (await pipeline.exec()) as (LicenseRecord | null)[];
-        const valid = records.filter((r): r is LicenseRecord => r !== null);
-        if (valid.length > 0) return valid;
+        return records.filter((r): r is LicenseRecord => r !== null);
       }
+      return [];
     } catch (err) {
       console.error('[DB] Redis list error:', err);
     }

@@ -3,6 +3,9 @@ import crypto from 'crypto';
 import { listLicenses, saveLicense, LicenseRecord } from '@/lib/db';
 import { generateMachineBoundKey } from '@/lib/crypto';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
 function checkAuth(req: NextRequest): boolean {
@@ -41,17 +44,26 @@ export async function GET(req: NextRequest) {
     // Sort newest first
     keys.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    return NextResponse.json({
-      success: true,
-      stats: {
-        total: keys.length,
-        active,
-        unused,
-        revoked,
-        expired,
+    return NextResponse.json(
+      {
+        success: true,
+        stats: {
+          total: keys.length,
+          active,
+          unused,
+          revoked,
+          expired,
+        },
+        keys,
       },
-      keys,
-    });
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ success: false, message: err?.message }, { status: 500 });
   }
