@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { listLicenses, saveLicense, LicenseRecord } from '@/lib/db';
+import { listLicenses, saveLicense, getLicense, LicenseRecord } from '@/lib/db';
 import { generateMachineBoundKey } from '@/lib/crypto';
 
 export const dynamic = 'force-dynamic';
@@ -97,7 +97,16 @@ export async function POST(req: NextRequest) {
       key = generateMachineBoundKey(tier, bound_machine_id || '', parseInt(duration_days, 10));
     }
 
+    const existing = await getLicense(key);
     const nowIso = new Date().toISOString().replace('.000Z', 'Z');
+
+    let expires_at = existing?.expires_at || null;
+    if (bound_machine_id && (!expires_at || parseInt(duration_days, 10) !== existing?.duration_days)) {
+      expires_at = new Date((Math.floor(Date.now() / 1000) + parseInt(duration_days, 10) * 86400) * 1000)
+        .toISOString()
+        .replace('.000Z', 'Z');
+    }
+
     const record: LicenseRecord = {
       key,
       tier: tier as 'standard' | 'pro' | 'vip',
@@ -106,17 +115,13 @@ export async function POST(req: NextRequest) {
       max_accounts: parseInt(max_accounts, 10),
       max_concurrent_jobs: parseInt(max_concurrent_jobs, 10),
       notes: notes || '',
-      created_at: nowIso,
+      created_at: existing?.created_at || nowIso,
       bound_machine_id: bound_machine_id,
-      activated_at: bound_machine_id ? nowIso : null,
-      expires_at: bound_machine_id
-        ? new Date((Math.floor(Date.now() / 1000) + parseInt(duration_days, 10) * 86400) * 1000)
-            .toISOString()
-            .replace('.000Z', 'Z')
-        : null,
-      last_heartbeat: null,
-      customer_email: customer_email ? customer_email.trim() : null,
-      customer_phone: customer_phone ? customer_phone.trim() : null,
+      activated_at: bound_machine_id ? (existing?.activated_at || nowIso) : null,
+      expires_at,
+      last_heartbeat: existing?.last_heartbeat || null,
+      customer_email: customer_email !== undefined ? (customer_email ? customer_email.trim() : null) : (existing?.customer_email || null),
+      customer_phone: customer_phone !== undefined ? (customer_phone ? customer_phone.trim() : null) : (existing?.customer_phone || null),
     };
 
     await saveLicense(record);
