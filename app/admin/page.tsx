@@ -112,6 +112,35 @@ export default function AdminPage() {
     customer_email: '',
   });
 
+  // Edit Modal State
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
+  const [editForm, setEditForm] = useState({
+    key: '',
+    tier: 'pro',
+    duration_days: 30,
+    max_accounts: 10,
+    max_concurrent_jobs: 3,
+    notes: '',
+    machine_id: '',
+    customer_phone: '',
+    customer_email: '',
+  });
+
+  const openEditModal = (item: LicenseRecord) => {
+    setEditForm({
+      key: item.key,
+      tier: item.tier || 'pro',
+      duration_days: item.duration_days || 30,
+      max_accounts: item.max_accounts ?? (item.tier === 'vip' ? 50 : item.tier === 'pro' ? 20 : 1),
+      max_concurrent_jobs: item.max_concurrent_jobs ?? (item.tier === 'vip' ? 20 : item.tier === 'pro' ? 10 : 5),
+      notes: item.notes || '',
+      machine_id: item.bound_machine_id || '',
+      customer_phone: item.customer_phone || '',
+      customer_email: item.customer_email || '',
+    });
+    setShowEditModal(true);
+  };
+
   useEffect(() => {
     const saved = localStorage.getItem('vidomni_admin_token');
     if (saved) {
@@ -220,6 +249,71 @@ export default function AdminPage() {
         await fetchKeys(activeToken);
       } else {
         alert(data.message || 'Lỗi khi tạo key');
+      }
+    } catch (err: any) {
+      alert('Lỗi: ' + err.message);
+    }
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const activeToken = getAuthToken();
+    try {
+      const upperKey = editForm.key.trim().toUpperCase();
+      const rawMid = editForm.machine_id.trim().toUpperCase();
+      const boundMid = rawMid.length > 0 ? rawMid : null;
+
+      const payload = {
+        custom_key: upperKey,
+        tier: editForm.tier,
+        duration_days: Number(editForm.duration_days) || 30,
+        max_accounts: Number(editForm.max_accounts) || 1,
+        max_concurrent_jobs: Number(editForm.max_concurrent_jobs) || 1,
+        notes: editForm.notes || '',
+        machine_id: rawMid,
+        customer_phone: editForm.customer_phone || '',
+        customer_email: editForm.customer_email || '',
+      };
+
+      const res = await fetch('/api/admin/keys', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${activeToken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+
+      // Đồng bộ trực tiếp lên Upstash Redis Edge Cloud
+      try {
+        const upstashRec = {
+          key: upperKey,
+          tier: editForm.tier,
+          status: boundMid ? 'active' : 'unused',
+          duration_days: Number(editForm.duration_days) || 30,
+          max_accounts: Number(editForm.max_accounts) || 1,
+          max_concurrent_jobs: Number(editForm.max_concurrent_jobs) || 1,
+          notes: editForm.notes || '',
+          bound_machine_id: boundMid,
+          customer_phone: editForm.customer_phone || '',
+          customer_email: editForm.customer_email || '',
+        };
+        fetch(`https://select-wahoo-44785.upstash.io/set/license:${upperKey}`, {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer Aa7xAAIgcDEyMjI3ODQ5YTg4MTE0OTQwODI1MDhmY2JlNjA5MDU5YQ',
+          },
+          body: JSON.stringify(upstashRec),
+        }).catch(() => {});
+      } catch {}
+
+      if (data.success) {
+        setShowEditModal(false);
+        alert(`✓ Đã lưu thay đổi cho key [${upperKey}] thành công!`);
+        await fetchKeys(activeToken);
+      } else {
+        alert('Lỗi: ' + (data.message || 'Không thể lưu thay đổi'));
       }
     } catch (err: any) {
       alert('Lỗi: ' + err.message);
@@ -584,7 +678,14 @@ export default function AdminPage() {
                   <tr key={item.key} className="hover:bg-gray-800/30 transition-colors">
                     <td className="py-4 px-5 font-mono text-sm font-semibold text-white">
                       <div className="flex items-center gap-2">
-                        <span>{item.key}</span>
+                        <button
+                          onClick={() => openEditModal(item)}
+                          className="hover:text-blue-400 hover:underline flex items-center gap-1.5 cursor-pointer text-left font-bold"
+                          title="Click để chỉnh sửa toàn bộ thông tin key này"
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
+                          <span>{item.key}</span>
+                        </button>
                         <button
                           onClick={() => copyToClipboard(item.key)}
                           className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white"
@@ -730,9 +831,9 @@ export default function AdminPage() {
                             <Copy className="w-3 h-3" />
                           </button>
                           <button
-                            onClick={() => handleEditMachineId(item.key, item.bound_machine_id || '')}
+                            onClick={() => openEditModal(item)}
                             className="p-1 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-950/40 rounded transition-colors cursor-pointer"
-                            title="Chỉnh sửa Mã Máy (Hardware ID)"
+                            title="Chỉnh sửa Mã Máy & Thông tin key"
                           >
                             <Pencil className="w-3 h-3" />
                           </button>
@@ -741,9 +842,9 @@ export default function AdminPage() {
                         <div className="flex items-center gap-1.5">
                           <span className="text-gray-500 italic text-xs">Chưa khóa máy</span>
                           <button
-                            onClick={() => handleEditMachineId(item.key, '')}
+                            onClick={() => openEditModal(item)}
                             className="p-1 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-950/40 rounded transition-colors cursor-pointer"
-                            title="Gán Mã Máy thủ công"
+                            title="Gán Mã Máy & Sửa thông tin key"
                           >
                             <Pencil className="w-3 h-3" />
                           </button>
@@ -771,6 +872,13 @@ export default function AdminPage() {
                     </td>
 
                     <td className="py-4 px-6 text-right space-x-1">
+                      <button
+                        onClick={() => openEditModal(item)}
+                        className="p-1.5 rounded-lg bg-gray-800 hover:bg-amber-900/50 text-amber-400 hover:text-amber-300 border border-amber-500/30 transition-colors"
+                        title="✏️ Sửa toàn bộ thông tin Key (Gói, Máy, Hạn, Nick, Luồng, Thông tin khách)"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         onClick={() => {
                           const currentTier = item.tier;
@@ -1093,7 +1201,225 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Modal Thông Báo Key Tạo Thành Công */}
+      {/* Modal Chỉnh Sửa Thông Tin Key */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#111827] border border-gray-800 rounded-2xl p-6 max-w-lg w-full space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-yellow-400" />
+                <span>
+                  Chỉnh Sửa Key: <span className="font-mono text-blue-400">{editForm.key}</span>
+                </span>
+              </h3>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4 text-sm">
+              {/* Machine ID / Hardware ID Field */}
+              <div className="p-4 rounded-xl bg-blue-950/30 border border-blue-500/40 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-blue-300 uppercase tracking-wide flex items-center gap-1.5">
+                    <Laptop className="w-4 h-4 text-blue-400" />
+                    <span>MÃ MÁY TÍNH KHÁCH HÀNG (HARDWARE ID / MACHINE ID)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const clipText = await navigator.clipboard.readText();
+                        const clean = clipText.trim();
+                        if (clean) {
+                          setEditForm((prev) => ({ ...prev, machine_id: clean }));
+                        }
+                      } catch {}
+                    }}
+                    className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1 cursor-pointer bg-blue-900/50 hover:bg-blue-800/60 px-2.5 py-1 rounded-lg border border-blue-600/40 transition-all"
+                  >
+                    📋 Dán Từ Clipboard
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Dán Hardware ID khách gửi (Ví dụ: DA6FEAE6E42F6611...)"
+                  value={editForm.machine_id}
+                  onChange={(e) => setEditForm({ ...editForm, machine_id: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-green-300 font-mono text-xs focus:outline-none focus:border-blue-400"
+                />
+                <p className="text-[11px] text-gray-400">
+                  💡 Khách hàng mở phần mềm bấm <b>[Sao Chép]</b> mã máy rồi gửi cho bạn. Dán vào đây để hệ thống khóa cứng bản quyền cho máy đó (1 Máy - 1 Key). Hoặc xóa trắng để mở khóa máy.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1">
+                    Gói Bản Quyền (Tier)
+                  </label>
+                  <select
+                    value={editForm.tier}
+                    onChange={(e) => {
+                      const newTier = e.target.value;
+                      const defaultAcc = newTier === 'vip' ? 50 : newTier === 'pro' ? 20 : 1;
+                      const defaultTh = newTier === 'vip' ? 20 : newTier === 'pro' ? 10 : 5;
+                      setEditForm({
+                        ...editForm,
+                        tier: newTier,
+                        max_accounts: defaultAcc,
+                        max_concurrent_jobs: defaultTh,
+                      });
+                    }}
+                    className="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="standard">Standard (1 Nick / 5 Luồng)</option>
+                    <option value="pro">Pro (20 Nick / 10 Luồng)</option>
+                    <option value="vip">VIP (50 Nick / 20 Luồng)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1">
+                    Thời Hạn Sử Dụng
+                  </label>
+                  <select
+                    value={editForm.duration_days}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, duration_days: parseInt(e.target.value, 10) })
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="3">3 Ngày (Dùng thử Trial)</option>
+                    <option value="7">7 Ngày (1 Tuần)</option>
+                    <option value="30">30 Ngày (1 Tháng)</option>
+                    <option value="90">90 Ngày (3 Tháng)</option>
+                    <option value="180">180 Ngày (6 Tháng)</option>
+                    <option value="365">365 Ngày (1 Năm)</option>
+                    <option value="3650">3650 Ngày (Vĩnh Viễn)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1">
+                    Số Nick Google Tối Đa
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="200"
+                    value={editForm.max_accounts}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        max_accounts: parseInt(e.target.value, 10) || 1,
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1">
+                    Số Luồng Render Song Song
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={editForm.max_concurrent_jobs}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        max_concurrent_jobs: parseInt(e.target.value, 10) || 1,
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* License Key Display */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 mb-1">
+                  Mã Bản Quyền (License Key)
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value={editForm.key}
+                  className="w-full px-3 py-2.5 rounded-xl bg-gray-950 border border-gray-800 text-green-400 font-mono font-bold text-sm tracking-wider cursor-not-allowed select-all"
+                />
+              </div>
+
+              {/* Contact fields */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1">
+                    <Phone className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Số Điện Thoại Khách (Tùy chọn)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ví dụ: 0987654321"
+                    value={editForm.customer_phone}
+                    onChange={(e) => setEditForm({ ...editForm, customer_phone: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white font-mono text-xs focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1">
+                    <Mail className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Email Khách (Tùy chọn)</span>
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="khachhang@gmail.com"
+                    value={editForm.customer_email}
+                    onChange={(e) => setEditForm({ ...editForm, customer_email: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white text-xs focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 mb-1">
+                  Ghi Chú Khách Hàng (Tên, SĐT, Zalo/Facebook, Giao dịch)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Ví dụ: Anh Nam MMO - Thanh toán qua VCB ngày 01/10..."
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-blue-500 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 transition-colors font-medium"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold transition-all shadow-lg shadow-amber-600/30 flex items-center gap-2"
+                >
+                  <Pencil className="w-4 h-4" />
+                  <span>💾 Lưu Thay Đổi</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {newlyCreatedKey && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
           <div className="w-full max-w-md p-6 rounded-2xl bg-[#111827] border-2 border-green-500/50 shadow-2xl shadow-green-500/20 space-y-5 text-center">
