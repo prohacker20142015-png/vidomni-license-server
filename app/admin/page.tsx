@@ -23,6 +23,7 @@ import {
   Phone,
   Mail,
   Crown,
+  Pencil,
 } from 'lucide-react';
 
 interface LicenseRecord {
@@ -326,6 +327,61 @@ export default function AdminPage() {
       setTimeout(() => {
         fetchKeys(activeToken);
       }, 400);
+    }
+  };
+
+  const handleEditMachineId = async (key: string, currentHwid: string) => {
+    const activeToken = getAuthToken();
+    const upperKey = key.trim().toUpperCase();
+    const input = prompt(
+      `✏️ Chỉnh sửa Mã Máy (Hardware ID) cho key [${upperKey}]:\n\n- Dán mã máy mới của khách hàng vào đây (64 ký tự SHA-256).\n- Hoặc để trống để chuyển về trạng thái 'Chưa khóa máy' (cho khách đổi máy).`,
+      currentHwid || ''
+    );
+    if (input === null) return;
+
+    const newHwid = input.trim().toUpperCase();
+    try {
+      if (newHwid.length > 0) {
+        const existing = keys.find((k) => k.key.toUpperCase() === upperKey);
+        const res = await fetch('/api/admin/keys', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${activeToken}`,
+          },
+          body: JSON.stringify({
+            custom_key: upperKey,
+            tier: existing?.tier || 'pro',
+            duration_days: existing?.duration_days || 30,
+            max_accounts: existing?.max_accounts || 20,
+            max_concurrent_jobs: existing?.max_concurrent_jobs || 10,
+            machine_id: newHwid,
+            customer_phone: existing?.customer_phone || '',
+            customer_email: existing?.customer_email || '',
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert(`✓ Đã cập nhật mã máy mới cho key [${upperKey}] thành công!`);
+        } else {
+          alert('Lỗi: ' + (data.message || 'Không thể cập nhật mã máy'));
+        }
+      } else {
+        const res = await fetch('/api/admin/keys/action', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${activeToken}`,
+          },
+          body: JSON.stringify({ key: upperKey, action: 'reset_machine' }),
+        });
+        const data = await res.json();
+        alert(data.message || 'Đã gỡ khóa máy thành công!');
+      }
+    } catch (err: any) {
+      alert('Lỗi: ' + err.message);
+    } finally {
+      fetchKeys(activeToken);
     }
   };
 
@@ -663,19 +719,35 @@ export default function AdminPage() {
                           <span className="p-1 rounded bg-blue-900/30 text-blue-400 border border-blue-800/40">
                             <Laptop className="w-3.5 h-3.5" />
                           </span>
-                          <span className="text-gray-300 truncate max-w-[130px] font-mono text-[11px]">
+                          <span className="text-gray-300 truncate max-w-[120px] font-mono text-[11px] font-semibold">
                             {item.bound_machine_id}
                           </span>
                           <button
                             onClick={() => copyToClipboard(item.bound_machine_id || '')}
-                            className="p-1 text-gray-500 hover:text-blue-400 transition-colors cursor-pointer"
+                            className="p-1 text-gray-400 hover:text-blue-400 hover:bg-slate-700/50 rounded transition-colors cursor-pointer"
                             title="Sao chép Mã Máy (Hardware ID)"
                           >
                             <Copy className="w-3 h-3" />
                           </button>
+                          <button
+                            onClick={() => handleEditMachineId(item.key, item.bound_machine_id || '')}
+                            className="p-1 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-950/40 rounded transition-colors cursor-pointer"
+                            title="Chỉnh sửa Mã Máy (Hardware ID)"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
                         </div>
                       ) : (
-                        <span className="text-gray-500 italic text-xs">Chưa khóa máy</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-gray-500 italic text-xs">Chưa khóa máy</span>
+                          <button
+                            onClick={() => handleEditMachineId(item.key, '')}
+                            className="p-1 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-950/40 rounded transition-colors cursor-pointer"
+                            title="Gán Mã Máy thủ công"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        </div>
                       )}
                     </td>
 
