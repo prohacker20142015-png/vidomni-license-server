@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bảng Quản Lý & Nâng Cấp Key Bản Quyền VidOmni</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    code, .font-mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="bg-[#0b0f19] text-gray-100 min-h-screen">
+  <!-- Top Navigation -->
+  <header class="border-b border-gray-800 bg-[#0f172a]/80 backdrop-blur sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+          <span class="text-xl">🛡️</span>
+        </div>
+        <div>
+          <h1 class="text-base font-bold text-white flex items-center gap-2">
+            VidOmni License Hub
+            <span class="text-[10px] uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">Live Cloud</span>
+          </h1>
+          <p class="text-xs text-gray-400">Quản lý & Sửa gói trực tiếp • Auto-Sync tức thời về Tool khách</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <button onclick="loadKeys()" class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold border border-gray-700 transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          Làm Mới
+        </button>
+        <button onclick="openCreateModal()" class="inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 transition">
+          <span>+</span> Tạo Key Mới
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <!-- Stat Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div class="p-4 rounded-2xl bg-[#131d31] border border-gray-800">
+        <div class="text-xs font-semibold text-gray-400">TỔNG SỐ KEY</div>
+        <div id="stat-total" class="text-2xl font-extrabold text-white mt-1">0</div>
+      </div>
+      <div class="p-4 rounded-2xl bg-[#131d31] border border-gray-800">
+        <div class="text-xs font-semibold text-emerald-400">ĐANG HOẠT ĐỘNG</div>
+        <div id="stat-active" class="text-2xl font-extrabold text-emerald-400 mt-1">0</div>
+      </div>
+      <div class="p-4 rounded-2xl bg-[#131d31] border border-gray-800">
+        <div class="text-xs font-semibold text-blue-400">CHƯA DÙNG</div>
+        <div id="stat-unused" class="text-2xl font-extrabold text-blue-400 mt-1">0</div>
+      </div>
+      <div class="p-4 rounded-2xl bg-[#131d31] border border-gray-800">
+        <div class="text-xs font-semibold text-red-400">BỊ KHÓA / HẾT HẠN</div>
+        <div id="stat-revoked" class="text-2xl font-extrabold text-red-400 mt-1">0</div>
+      </div>
+    </div>
+
+    <!-- Alert Banner Guide -->
+    <div class="p-4 rounded-2xl bg-gradient-to-r from-blue-950/40 via-indigo-950/20 to-purple-950/40 border border-blue-500/30 flex items-start gap-3">
+      <span class="text-2xl">⚡</span>
+      <div class="text-xs space-y-1">
+        <div class="font-bold text-blue-300 text-sm">Tính Năng Sửa Gói Trực Tiếp & Auto-Sync Thời Gian Thực</div>
+        <div class="text-gray-300 leading-relaxed">
+          Chỉ cần click nút <b class="text-yellow-300">👑 Nâng Pro</b> hoặc <b class="text-purple-300">💎 Nâng VIP</b> tại bất kỳ Key nào. Máy chủ sẽ cập nhật ngay và <b>Tool đang chạy trên máy tính khách sẽ tự động nâng cấp hạn mức (mở 20 nick / 10 luồng) chỉ sau tối đa 15 giây</b> mà khách không cần nhập lại key hay khởi động lại Tool!
+        </div>
+      </div>
+    </div>
+
+    <!-- Table Container -->
+    <div class="rounded-2xl bg-[#131d31] border border-gray-800 overflow-hidden shadow-2xl">
+      <div class="p-4 border-b border-gray-800/80 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="relative w-full sm:w-80">
+          <input
+            id="search-input"
+            oninput="renderTable()"
+            type="text"
+            placeholder="Tìm theo Key, Machine ID, SĐT..."
+            class="w-full pl-9 pr-4 py-2 rounded-xl bg-gray-900/90 border border-gray-700/80 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+          />
+          <span class="absolute left-3 top-2.5 text-gray-500 text-xs">🔍</span>
+        </div>
+        <div class="text-xs text-gray-400">
+          Máy chủ: <code class="text-blue-400">https://vidomni-license-server.vercel.app</code>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="border-b border-gray-800 text-[11px] font-bold text-gray-400 uppercase tracking-wider bg-gray-900/40">
+              <th class="py-3 px-4">Mã Bản Quyền</th>
+              <th class="py-3 px-4">Gói Hiện Tại</th>
+              <th class="py-3 px-4">Trạng Thái</th>
+              <th class="py-3 px-4">Mã Máy (Hardware ID)</th>
+              <th class="py-3 px-4">Hạn Dùng</th>
+              <th class="py-3 px-4 text-center">Sửa Gói 1 Chạm (Auto-Sync)</th>
+              <th class="py-3 px-4 text-right">Thao Tác Khác</th>
+            </tr>
+          </thead>
+          <tbody id="key-tbody" class="divide-y divide-gray-800/60">
+            <tr>
+              <td colspan="7" class="py-8 text-center text-gray-500">Đang tải danh sách key từ máy chủ...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal Tạo Key Mới -->
+  <div id="create-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div class="w-full max-w-md p-6 rounded-2xl bg-[#111827] border border-gray-800 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-gray-800">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <span>👑</span> Tạo Hoặc Ghi Đè Key Bản Quyền
+        </h3>
+        <button onclick="closeCreateModal()" class="text-gray-400 hover:text-white">✕</button>
+      </div>
+
+      <form onsubmit="handleCreateKey(event)" class="space-y-3.5 text-xs">
+        <div>
+          <label class="block font-semibold text-gray-300 mb-1">Mã Key Tùy Chọn (Để trống để tự sinh ngẫu nhiên):</label>
+          <input id="modal-key" type="text" placeholder="Ví dụ: VIDO-PRO-XXXX-YYYY" class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-yellow-300 font-mono focus:outline-none focus:border-blue-500 uppercase" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-gray-300 mb-1">Gói Bản Quyền:</label>
+            <select id="modal-tier" class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white font-bold focus:outline-none focus:border-blue-500">
+              <option value="standard">Standard (1 Nick / 5 Luồng)</option>
+              <option value="pro" selected>Pro (20 Nick / 10 Luồng)</option>
+              <option value="vip">VIP (100 Nick / 50 Luồng)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-gray-300 mb-1">Thời Hạn Sử Dụng:</label>
+            <select id="modal-days" class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-blue-500">
+              <option value="30" selected>30 Ngày (1 Tháng)</option>
+              <option value="90">90 Ngày (3 Tháng)</option>
+              <option value="365">365 Ngày (1 Năm)</option>
+              <option value="3650">Trọn Đời (Lifetime)</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-gray-300 mb-1">Mã Máy Tính (Hardware ID) - Tùy chọn:</label>
+          <input id="modal-hwid" type="text" placeholder="Để trống để khách tự khóa máy lần đầu" class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-gray-300 font-mono text-[11px] focus:outline-none focus:border-blue-500 uppercase" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-gray-300 mb-1">Số ĐT Khách Hàng:</label>
+            <input id="modal-phone" type="text" placeholder="0987654321" class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block font-semibold text-gray-300 mb-1">Email Khách Hàng:</label>
+            <input id="modal-email" type="email" placeholder="customer@gmail.com" class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-blue-500" />
+          </div>
+        </div>
+
+        <div class="pt-2 flex justify-end gap-2">
+          <button type="button" onclick="closeCreateModal()" class="px-4 py-2 rounded-xl bg-gray-800 text-gray-300 hover:text-white font-medium">Hủy</button>
+          <button type="submit" class="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-600/30">Xác Nhận Tạo / Cập Nhật</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Chỉnh Sửa Key Bản Quyền (Chi tiết mọi thông tin) -->
+  <div id="edit-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div class="w-full max-w-lg p-6 rounded-2xl bg-[#111827] border border-gray-800 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-3 border-b border-gray-800">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <span>✏️</span> Chỉnh Sửa Thông Tin Key: <span id="edit-modal-title-key" class="font-mono text-blue-400">VIDO-...</span>
+        </h3>
+        <button onclick="closeEditModal()" class="text-gray-400 hover:text-white text-lg">✕</button>
+      </div>
+
+      <form onsubmit="handleSaveEditKey(event)" class="space-y-3.5 text-xs">
+        <!-- Machine ID / Hardware ID Field -->
+        <div class="p-3.5 rounded-xl bg-blue-950/30 border border-blue-500/40 space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-bold text-blue-300 uppercase tracking-wide flex items-center gap-1.5">
+              <span>💻</span>
+              <span>MÃ MÁY TÍNH KHÁCH HÀNG (HARDWARE ID / MACHINE ID)</span>
+            </label>
+            <button
+              type="button"
+              onclick="pasteEditHwid()"
+              class="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1 cursor-pointer bg-blue-900/50 hover:bg-blue-800/60 px-2.5 py-1 rounded-lg border border-blue-600/40 transition-all"
+            >
+              📋 Dán Từ Clipboard
+            </button>
+          </div>
+          <input
+            id="edit-modal-hwid"
+            type="text"
+            placeholder="Dán Hardware ID khách gửi (Ví dụ: DA6FEAE6E42F6611...)"
+            class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-green-300 font-mono text-[11px] focus:outline-none focus:border-blue-400"
+          />
+          <p class="text-[11px] text-gray-400">
+            💡 Khách hàng mở phần mềm bấm <b>[Sao Chép]</b> mã máy rồi gửi cho bạn. Dán vào đây để hệ thống khóa cứng bản quyền cho máy đó (1 Máy - 1 Key). Hoặc xóa trắng để mở khóa máy.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-gray-300 mb-1">Gói Bản Quyền (Tier):</label>
+            <select
+              id="edit-modal-tier"
+              onchange="onEditTierChange()"
+              class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white font-bold focus:outline-none focus:border-blue-500"
+            >
+              <option value="standard">Standard (1 Nick / 5 Luồng)</option>
+              <option value="pro">Pro (20 Nick / 10 Luồng)</option>
+              <option value="vip">VIP (50 Nick / 20 Luồng)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-gray-300 mb-1">Thời Hạn Sử Dụng:</label>
+            <select id="edit-modal-days" class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-blue-500">
+              <option value="3">3 Ngày (Dùng thử Trial)</option>
+              <option value="7">7 Ngày (1 Tuần)</option>
+              <option value="30">30 Ngày (1 Tháng)</option>
+              <option value="90">90 Ngày (3 Tháng)</option>
+              <option value="180">180 Ngày (6 Tháng)</option>
+              <option value="365">365 Ngày (1 Năm)</option>
+              <option value="3650">3650 Ngày (Vĩnh Viễn)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-gray-300 mb-1">Số Nick Google Tối Đa:</label>
+            <input
+              id="edit-modal-max-acc"
+              type="number"
+              min="1"
+              max="200"
+              class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block font-semibold text-gray-300 mb-1">Số Luồng Render Song Song:</label>
+            <input
+              id="edit-modal-max-th"
+              type="number"
+              min="1"
+              max="50"
+              class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-gray-300 mb-1">Mã Bản Quyền (License Key):</label>
+          <input
+            id="edit-modal-key"
+            type="text"
+            readonly
+            class="w-full px-3 py-2.5 rounded-xl bg-gray-950 border border-gray-800 text-green-400 font-mono font-bold text-sm tracking-wider cursor-not-allowed select-all"
+          />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-gray-300 mb-1 flex items-center gap-1">
+              <span>📞</span>
+              <span>Số Điện Thoại Khách (Tùy chọn):</span>
+            </label>
+            <input
+              id="edit-modal-phone"
+              type="text"
+              placeholder="0987654321"
+              class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white font-mono text-xs focus:outline-none focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block font-semibold text-gray-300 mb-1 flex items-center gap-1">
+              <span>✉️</span>
+              <span>Email Khách (Tùy chọn):</span>
+            </label>
+            <input
+              id="edit-modal-email"
+              type="email"
+              placeholder="khachhang@gmail.com"
+              class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white text-xs focus:outline-none focus:border-blue-500"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-gray-300 mb-1">Ghi Chú Khách Hàng (Tên, SĐT, Zalo/Facebook, Giao dịch):</label>
+          <textarea
+            id="edit-modal-notes"
+            rows="2"
+            placeholder="Ví dụ: Anh Nam MMO - Thanh toán qua VCB ngày 01/10..."
+            class="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-blue-500 resize-none"
+          ></textarea>
+        </div>
+
+        <div class="pt-2 flex justify-end gap-3 border-t border-gray-800">
+          <button type="button" onclick="closeEditModal()" class="px-4 py-2.5 rounded-xl bg-gray-800 text-gray-300 hover:text-white font-medium">Hủy</button>
+          <button type="submit" class="px-6 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold shadow-lg shadow-amber-600/30 flex items-center gap-2">
+            <span>💾 Lưu Thay Đổi</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const SERVER_URL = "https://vavaw-1a44d.web.app";
+    const ADMIN_PASS = "admin123";
+    const UPSTASH_URL = "https://select-wahoo-44785.upstash.io";
+    const UPSTASH_TOKEN = "Aa7xAAIgcDEyMjI3ODQ5YTg4MTE0OTQwODI1MDhmY2JlNjA5MDU5YQ";
+    let allKeys = [];
+
+    async function syncToUpstash(key, record) {
+      if (!key) return;
+      try {
+        const uKey = key.trim().toUpperCase();
+        if (record) {
+          await fetch(`${UPSTASH_URL}/set/license:${uKey}`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
+            body: typeof record === "string" ? record : JSON.stringify(record)
+          });
+          await fetch(`${UPSTASH_URL}/sadd/licenses:index/${uKey}`, {
+            headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
+          });
+        } else {
+          await fetch(`${UPSTASH_URL}/del/license:${uKey}`, {
+            headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
+          });
+          await fetch(`${UPSTASH_URL}/srem/licenses:index/${uKey}`, {
+            headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
+          });
+        }
+      } catch (e) {
+        console.warn("Upstash sync warning:", e);
+      }
+    }
+
+    async function loadKeys() {
+      document.getElementById("key-tbody").innerHTML = `<tr><td colspan="7" class="py-8 text-center text-blue-400 font-semibold animate-pulse">⏳ Đang tải dữ liệu từ Cloud Edge Database...</td></tr>`;
+      
+      let loadedFromUpstash = false;
+      try {
+        const indexRes = await fetch(`${UPSTASH_URL}/smembers/licenses:index`, {
+          headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
+        });
+        const indexData = await indexRes.json();
+        const keysList = indexData.result || [];
+        
+        if (keysList.length > 0) {
+          const pipelineCmds = keysList.map(k => ["get", `license:${k}`]);
+          const pipeRes = await fetch(`${UPSTASH_URL}/pipeline`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${UPSTASH_TOKEN}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(pipelineCmds)
+          });
+          const pipeData = await pipeRes.json();
+          const records = [];
+          for (const item of pipeData) {
+            if (item && item.result) {
+              try {
+                const rec = typeof item.result === "string" ? JSON.parse(item.result) : item.result;
+                if (rec && rec.key) records.push(rec);
+              } catch (e) {}
+            }
+          }
+          if (records.length > 0) {
+            // Sắp xếp key mới nhất lên đầu
+            records.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+            allKeys = records;
+            updateStatsFromKeys(records);
+            renderTable();
+            loadedFromUpstash = true;
+          }
+        } else {
+          allKeys = [];
+          updateStatsFromKeys([]);
+          renderTable();
+          loadedFromUpstash = true;
+        }
+      } catch (err) {
+        console.warn("Upstash read error:", err);
+        if (!loadedFromUpstash) {
+          document.getElementById("key-tbody").innerHTML = `<tr><td colspan="7" class="py-8 text-center text-red-400 font-semibold">Lỗi kết nối tới Cloud Edge Database: ${err.message}</td></tr>`;
+        }
+      }
+    }
+
+    function updateStatsFromKeys(keys) {
+      const nowEpoch = Math.floor(Date.now() / 1000);
+      let active = 0, unused = 0, revoked = 0;
+      for (const k of keys) {
+        if (k.status === 'revoked') {
+          revoked++;
+        } else if (k.status === 'unused') {
+          unused++;
+        } else if (k.expires_at && Math.floor(new Date(k.expires_at).getTime() / 1000) < nowEpoch) {
+          revoked++;
+        } else {
+          active++;
+        }
+      }
+      document.getElementById("stat-total").innerText = keys.length;
+      document.getElementById("stat-active").innerText = active;
+      document.getElementById("stat-unused").innerText = unused;
+      document.getElementById("stat-revoked").innerText = revoked;
+    }
+
+    function renderTable() {
+      const q = (document.getElementById("search-input").value || "").trim().toUpperCase();
+      const filtered = allKeys.filter(k => {
+        if (!q) return true;
+        return (
+          (k.key && k.key.toUpperCase().includes(q)) ||
+          (k.bound_machine_id && k.bound_machine_id.toUpperCase().includes(q)) ||
+          (k.customer_phone && k.customer_phone.includes(q)) ||
+          (k.customer_email && k.customer_email.toUpperCase().includes(q))
+        );
+      });
+
+      const tbody = document.getElementById("key-tbody");
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-gray-400 font-medium">Không tìm thấy mã bản quyền nào. Hãy bấm "+ Tạo Key Mới" ở góc phải.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(item => {
+        const tier = (item.tier || "standard").toLowerCase();
+        let tierBadge = "";
+        if (tier === "vip") {
+          tierBadge = `<span class="px-2.5 py-1 rounded-full font-bold uppercase bg-purple-900/60 text-purple-300 border border-purple-500/40">💎 VIP (100 Nick)</span>`;
+        } else if (tier === "pro") {
+          tierBadge = `<span class="px-2.5 py-1 rounded-full font-bold uppercase bg-blue-900/60 text-blue-300 border border-blue-500/40">👑 PRO (20 Nick)</span>`;
+        } else {
+          tierBadge = `<span class="px-2.5 py-1 rounded-full font-bold uppercase bg-amber-900/60 text-amber-300 border border-amber-500/40">STANDARD (1 Nick)</span>`;
+        }
+
+        const isBound = !!item.bound_machine_id;
+        const hwidVal = item.bound_machine_id || "";
+        const hwidDisplay = isBound
+          ? `
+            <div class="space-y-1">
+              <div class="flex items-center gap-1.5 font-mono text-[11px] text-gray-200 bg-gray-900/90 px-2 py-1 rounded-lg border border-gray-700 max-w-[240px]" title="${hwidVal}">
+                <span class="truncate select-all text-blue-300 font-bold">${hwidVal}</span>
+                <button onclick="copyText('${hwidVal}')" class="p-0.5 text-gray-400 hover:text-white flex-shrink-0" title="Sao chép toàn bộ mã máy">📋</button>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="openEditKeyModal('${item.key}')" class="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 hover:text-amber-300 bg-amber-950/60 hover:bg-amber-900/80 px-2 py-0.5 rounded border border-amber-500/40 transition" title="Chỉnh sửa toàn bộ thông tin key">
+                  ✏️ Sửa Thông Tin
+                </button>
+                <button onclick="resetMachine('${item.key}')" class="text-[10px] text-gray-400 hover:text-red-400 underline" title="Gỡ khóa mã máy">
+                  Gỡ máy
+                </button>
+              </div>
+            </div>
+          `
+          : `
+            <div class="space-y-1">
+              <span class="inline-block text-emerald-400 font-semibold text-[11px] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">Chưa khóa máy (Tự do)</span>
+              <div>
+                <button onclick="openEditKeyModal('${item.key}')" class="inline-flex items-center gap-1 text-[10px] font-bold text-blue-400 hover:text-blue-300 bg-blue-950/60 hover:bg-blue-900/80 px-2 py-0.5 rounded border border-blue-500/40 transition" title="Gán sẵn mã máy & Sửa key">
+                  ✏️ Gán & Sửa Key
+                </button>
+              </div>
+            </div>
+          `;
+
+        let expDisplay = "—";
+        if (item.expires_at) {
+          const d = new Date(item.expires_at);
+          expDisplay = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`;
+        }
+
+        const contactInfo = (item.customer_phone || item.customer_email)
+          ? `<div class="text-[10px] text-gray-400 mt-0.5">${item.customer_phone || ''} ${item.customer_email ? '(' + item.customer_email + ')' : ''}</div>`
+          : '';
+
+        return `
+          <tr class="hover:bg-gray-800/40 transition">
+            <td class="py-3.5 px-4 font-mono font-bold text-white">
+              <div class="flex items-center gap-2">
+                <button onclick="openEditKeyModal('${item.key}')" class="hover:text-blue-400 hover:underline flex items-center gap-1.5 cursor-pointer text-left font-bold" title="Click để chỉnh sửa toàn bộ thông tin key">
+                  <span class="text-amber-400 text-xs">✏️</span>
+                  <span>${item.key}</span>
+                </button>
+                <button onclick="copyText('${item.key}')" class="p-1 text-gray-500 hover:text-white" title="Sao chép Key">📋</button>
+              </div>
+              ${contactInfo}
+            </td>
+            <td class="py-3.5 px-4">${tierBadge}</td>
+            <td class="py-3.5 px-4">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${item.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : (item.status === 'unused' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400')}">
+                ${item.status}
+              </span>
+            </td>
+            <td class="py-3.5 px-4">${hwidDisplay}</td>
+            <td class="py-3.5 px-4 text-gray-400 font-mono">${expDisplay}</td>
+            <td class="py-3.5 px-4 text-center">
+              <div class="inline-flex items-center gap-1.5 p-1 rounded-xl bg-gray-900/90 border border-gray-700/60">
+                <button
+                  onclick="changeTier('${item.key}', 'standard')"
+                  class="px-2.5 py-1 rounded-lg text-[10px] font-bold transition ${tier === 'standard' ? 'bg-amber-600 text-white' : 'text-gray-400 hover:text-amber-300 hover:bg-gray-800'}"
+                  title="Chuyển về Standard (1 nick / 5 luồng)">
+                  Standard
+                </button>
+                <button
+                  onclick="changeTier('${item.key}', 'pro')"
+                  class="px-2.5 py-1 rounded-lg text-[10px] font-bold transition ${tier === 'pro' ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30' : 'text-gray-400 hover:text-blue-300 hover:bg-gray-800'}"
+                  title="Nâng cấp lên Pro (20 nick / 10 luồng)">
+                  👑 Pro
+                </button>
+                <button
+                  onclick="changeTier('${item.key}', 'vip')"
+                  class="px-2.5 py-1 rounded-lg text-[10px] font-bold transition ${tier === 'vip' ? 'bg-purple-600 text-white shadow-md shadow-purple-500/30' : 'text-gray-400 hover:text-purple-300 hover:bg-gray-800'}"
+                  title="Nâng cấp lên VIP (100 nick / 50 luồng)">
+                  💎 VIP
+                </button>
+              </div>
+            </td>
+            <td class="py-3.5 px-4 text-right space-x-1">
+              <button onclick="openEditKeyModal('${item.key}')" class="p-1.5 rounded-lg bg-gray-800 hover:bg-amber-900/50 text-amber-400 hover:text-amber-300 border border-amber-500/30 transition-colors" title="Sửa toàn bộ thông tin Key (Gói, Máy, Hạn, Nick, Luồng, Khách)">
+                ✏️
+              </button>
+              <button onclick="extendKey('${item.key}')" class="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white" title="Gia hạn +30 ngày">
+                ➕
+              </button>
+              <button onclick="deleteKey('${item.key}')" class="p-1.5 rounded-lg bg-gray-800 hover:bg-red-900/40 text-gray-400 hover:text-red-400" title="Xóa Key">
+                🗑️
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function openEditKeyModal(key) {
+      const item = allKeys.find(k => k.key.toUpperCase() === key.toUpperCase());
+      if (!item) return;
+
+      document.getElementById("edit-modal-title-key").innerText = item.key;
+      document.getElementById("edit-modal-key").value = item.key;
+      document.getElementById("edit-modal-hwid").value = item.bound_machine_id || "";
+      document.getElementById("edit-modal-tier").value = (item.tier || "pro").toLowerCase();
+      document.getElementById("edit-modal-days").value = item.duration_days || 30;
+      
+      const t = (item.tier || "pro").toLowerCase();
+      const defAcc = t === 'vip' ? 50 : (t === 'pro' ? 20 : 1);
+      const defTh = t === 'vip' ? 20 : (t === 'pro' ? 10 : 5);
+      document.getElementById("edit-modal-max-acc").value = item.max_accounts || defAcc;
+      document.getElementById("edit-modal-max-th").value = item.max_concurrent_jobs || defTh;
+      
+      document.getElementById("edit-modal-phone").value = item.customer_phone || "";
+      document.getElementById("edit-modal-email").value = item.customer_email || "";
+      document.getElementById("edit-modal-notes").value = item.notes || "";
+
+      document.getElementById("edit-modal").classList.remove("hidden");
+    }
+
+    function closeEditModal() {
+      document.getElementById("edit-modal").classList.add("hidden");
+    }
+
+    async function pasteEditHwid() {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text && text.trim()) {
+          document.getElementById("edit-modal-hwid").value = text.trim().toUpperCase();
+        }
+      } catch (e) {
+        const manual = prompt("Dán mã máy (Hardware ID) vào đây:");
+        if (manual && manual.trim()) {
+          document.getElementById("edit-modal-hwid").value = manual.trim().toUpperCase();
+        }
+      }
+    }
+
+    function onEditTierChange() {
+      const t = document.getElementById("edit-modal-tier").value;
+      const defAcc = t === 'vip' ? 50 : (t === 'pro' ? 20 : 1);
+      const defTh = t === 'vip' ? 20 : (t === 'pro' ? 10 : 5);
+      document.getElementById("edit-modal-max-acc").value = defAcc;
+      document.getElementById("edit-modal-max-th").value = defTh;
+    }
+
+    async function handleSaveEditKey(e) {
+      e.preventDefault();
+      const key = document.getElementById("edit-modal-key").value.trim().toUpperCase();
+      const hwid = document.getElementById("edit-modal-hwid").value.trim().toUpperCase();
+      const tier = document.getElementById("edit-modal-tier").value;
+      const days = parseInt(document.getElementById("edit-modal-days").value, 10) || 30;
+      const maxAcc = parseInt(document.getElementById("edit-modal-max-acc").value, 10) || 1;
+      const maxTh = parseInt(document.getElementById("edit-modal-max-th").value, 10) || 1;
+      const phone = document.getElementById("edit-modal-phone").value.trim();
+      const email = document.getElementById("edit-modal-email").value.trim();
+      const notes = document.getElementById("edit-modal-notes").value.trim();
+
+      const existing = allKeys.find(k => k.key.toUpperCase() === key) || {};
+      const nowIso = new Date().toISOString();
+
+      const updatedRecord = {
+        ...existing,
+        key: key,
+        tier: tier,
+        duration_days: days,
+        max_accounts: maxAcc,
+        max_concurrent_jobs: maxTh,
+        bound_machine_id: hwid.length > 0 ? hwid : null,
+        status: hwid.length > 0 ? "active" : "unused",
+        activated_at: hwid.length > 0 ? (existing.activated_at || nowIso) : null,
+        customer_phone: phone || null,
+        customer_email: email || null,
+        notes: notes || ""
+      };
+
+      // Cập nhật Upstash Edge Database (Cực nhanh, Master)
+      await syncToUpstash(key, updatedRecord);
+
+      closeEditModal();
+      alert(`✓ ĐÃ LƯU THAY ĐỔI CHO KEY [${key}] THÀNH CÔNG!\n\n• Gói: ${tier.toUpperCase()}\n• Hạn mức: ${maxAcc} Nick | ${maxTh} Luồng\n• Mã máy: ${hwid || 'Chưa khóa máy (Tự do)'}\n\nToàn bộ dữ liệu đã được cập nhật đồng bộ lên Cloud!`);
+      loadKeys();
+    }
+
+
+    async function editHwid(key, currentHwid) {
+      const input = prompt(
+        `✏️ CHỈNH SỬA MÃ MÁY (HARDWARE ID) CHO KEY [${key}]:\n\n- Dán mã máy mới của khách hàng vào đây (64 ký tự SHA-256).\n- Hoặc để trống để chuyển về trạng thái 'Chưa khóa máy' (khách tự do kích hoạt trên máy mới).`,
+        currentHwid || ""
+      );
+      if (input === null) return;
+
+      const newHwid = input.trim().toUpperCase();
+      const existing = allKeys.find(k => k.key.toUpperCase() === key.toUpperCase()) || {};
+
+      const nowIso = new Date().toISOString();
+      const updatedRecord = {
+        ...existing,
+        key: key.toUpperCase(),
+        bound_machine_id: newHwid.length > 0 ? newHwid : null,
+        status: newHwid.length > 0 ? "active" : "unused",
+        activated_at: newHwid.length > 0 ? (existing.activated_at || nowIso) : null
+      };
+
+      // Cập nhật ngay Upstash Redis Cloud
+      await syncToUpstash(key, updatedRecord);
+
+      if (newHwid.length > 0) {
+        alert(`✓ ĐÃ CẬP NHẬT MÃ MÁY THÀNH CÔNG!\nKey: [${key}]\nMã máy mới: ${newHwid}\n\nTool trên máy này đã có thể kích hoạt và hoạt động ngay.`);
+      } else {
+        alert(`✓ ĐÃ GỠ KHÓA MÁY THÀNH CÔNG!\nKey [${key}] đã chuyển về trạng thái 'Chưa khóa máy' (Tự do).`);
+      }
+      loadKeys();
+    }
+
+    async function changeTier(key, newTier) {
+      if (!confirm(`Xác nhận đổi gói cho key [${key}] sang [${newTier.toUpperCase()}]?\n\nTool máy khách sẽ tự động nhận diện và nâng cấp/hạ cấp sau vài giây!`)) {
+        return;
+      }
+
+      const maxAcc = newTier === 'vip' ? 100 : (newTier === 'pro' ? 20 : 1);
+      const maxTh = newTier === 'vip' ? 50 : (newTier === 'pro' ? 10 : 5);
+
+      const existing = allKeys.find(k => k.key.toUpperCase() === key.toUpperCase()) || {};
+      const updatedRecord = {
+        ...existing,
+        key: key.toUpperCase(),
+        tier: newTier,
+        max_accounts: maxAcc,
+        max_concurrent_jobs: maxTh,
+        status: existing.bound_machine_id ? "active" : (existing.status || "active")
+      };
+
+      // Cập nhật ngay Upstash Edge Database (Cực nhanh, Zero CORS)
+      await syncToUpstash(key, updatedRecord);
+
+      alert(`🎉 THÀNH CÔNG!\nKey [${key}] đã đổi sang [${newTier.toUpperCase()}]!\n\nĐã đồng bộ lên Cloud Database. Tool máy khách đang mở sẽ tự động nhận diện và cập nhật hạn mức ngay bây giờ.`);
+      loadKeys();
+    }
+
+    async function resetMachine(key) {
+      if (!confirm(`Reset mã máy cho key [${key}]? Khách hàng sẽ có thể kích hoạt trên máy mới.`)) return;
+      
+      const existing = allKeys.find(k => k.key.toUpperCase() === key.toUpperCase());
+      if (existing) {
+        existing.bound_machine_id = null;
+        existing.status = "unused";
+        await syncToUpstash(key, existing);
+      }
+
+      alert("✓ Đã reset mã máy thành công! Khách có thể kích hoạt trên máy mới.");
+      loadKeys();
+    }
+
+    async function extendKey(key) {
+      const daysStr = prompt("Gia hạn thêm bao nhiêu ngày?", "30");
+      if (!daysStr) return;
+      const days = parseInt(daysStr, 10);
+      if (isNaN(days) || days <= 0) return;
+
+      const existing = allKeys.find(k => k.key.toUpperCase() === key.toUpperCase());
+      if (existing) {
+        existing.duration_days = (existing.duration_days || 30) + days;
+        if (existing.expires_at) {
+          const curExp = new Date(existing.expires_at).getTime();
+          existing.expires_at = new Date(curExp + days * 86400 * 1000).toISOString();
+        }
+        await syncToUpstash(key, existing);
+      }
+
+      alert(`✓ Đã gia hạn thêm ${days} ngày cho key [${key}] thành công!`);
+      loadKeys();
+    }
+
+    async function deleteKey(key) {
+      if (!confirm(`XÓA VĨNH VIỄN key [${key}]?\n\nTool máy khách sẽ bị khóa ngay lập tức và dừng hoạt động!`)) return;
+
+      await syncToUpstash(key, null);
+
+      alert(`✓ Đã xóa vĩnh viễn key [${key}].`);
+      loadKeys();
+    }
+
+    function openCreateModal() {
+      // Tự sinh key mẫu
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      let r1 = "", r2 = "";
+      for (let i = 0; i < 4; i++) {
+        r1 += chars.charAt(Math.floor(Math.random() * chars.length));
+        r2 += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      document.getElementById("modal-key").value = `VIDO-PRO-${r1}-${r2}`;
+      document.getElementById("create-modal").classList.remove("hidden");
+    }
+
+    function closeCreateModal() {
+      document.getElementById("create-modal").classList.add("hidden");
+    }
+
+    async function handleCreateKey(e) {
+      e.preventDefault();
+      const customKey = document.getElementById("modal-key").value.trim().toUpperCase();
+      const tier = document.getElementById("modal-tier").value;
+      const days = parseInt(document.getElementById("modal-days").value, 10);
+      const hwid = document.getElementById("modal-hwid").value.trim().toUpperCase();
+      const phone = document.getElementById("modal-phone").value.trim();
+      const email = document.getElementById("modal-email").value.trim();
+
+      const maxAcc = tier === 'vip' ? 100 : (tier === 'pro' ? 20 : 1);
+      const maxTh = tier === 'vip' ? 50 : (tier === 'pro' ? 10 : 5);
+
+      const nowIso = new Date().toISOString();
+      const expIso = new Date(Date.now() + days * 86400 * 1000).toISOString();
+
+      const newRec = {
+        key: customKey,
+        tier,
+        status: hwid ? "active" : "unused",
+        duration_days: days,
+        max_accounts: maxAcc,
+        max_concurrent_jobs: maxTh,
+        bound_machine_id: hwid || null,
+        customer_phone: phone,
+        customer_email: email,
+        created_at: nowIso,
+        activated_at: hwid ? nowIso : null,
+        expires_at: hwid ? expIso : null,
+        last_heartbeat: null
+      };
+
+      // Lưu trực tiếp lên Upstash Redis Cloud
+      await syncToUpstash(customKey, newRec);
+
+      alert(`🎉 Tạo mã bản quyền thành công:\n${customKey}\n\nĐã lưu trữ an toàn trên Cloud Database.`);
+      closeCreateModal();
+      loadKeys();
+    }
+
+    function copyText(txt) {
+      navigator.clipboard.writeText(txt);
+      alert("Đã sao chép: " + txt);
+    }
+
+    // Auto load on start
+    loadKeys();
+  </script>
+</body>
+</html>
