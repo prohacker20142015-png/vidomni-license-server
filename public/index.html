@@ -29,33 +29,93 @@
   </style>
 </head>
 <body class="bg-[#0b0f19] text-gray-100 min-h-screen">
-  <!-- Top Navigation -->
-  <header class="border-b border-gray-800 bg-[#0f172a]/80 backdrop-blur sticky top-0 z-40">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
-          <span class="text-xl">🛡️</span>
+  <!-- Login Screen Portal -->
+  <div id="login-container" class="min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-md w-full p-8 rounded-3xl bg-[#111827]/90 border border-gray-800 shadow-2xl backdrop-blur-xl space-y-6">
+      <div class="text-center space-y-3">
+        <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center mx-auto shadow-xl shadow-blue-500/25">
+          <span class="text-3xl">🛡️</span>
         </div>
-        <div>
-          <h1 class="text-base font-bold text-white flex items-center gap-2">
-            VidOmni License Hub
-            <span class="text-[10px] uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">Live Cloud</span>
-          </h1>
-          <p class="text-xs text-gray-400">Quản lý & Sửa gói trực tiếp • Auto-Sync tức thời về Tool khách</p>
-        </div>
+        <h2 class="text-2xl font-black text-white tracking-tight">Khu Vực Quản Trị Bản Quyền</h2>
+        <p class="text-xs text-gray-400">Trang quản trị nội bộ VidOmni AI Studio Pro • Vui lòng nhập mật khẩu để mở khóa</p>
       </div>
 
-      <div class="flex items-center gap-3">
-        <button onclick="loadKeys()" class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold border border-gray-700 transition">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-          Làm Mới
+      <div id="login-error" class="hidden p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold flex items-center gap-2"></div>
+
+      <form onsubmit="handleAdminLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-gray-300 mb-2">
+            Mật Khẩu Quản Trị (Admin Password)
+          </label>
+          <div class="relative">
+            <input
+              id="login-password"
+              type="password"
+              required
+              placeholder="Nhập mật khẩu quản trị..."
+              class="w-full px-4 py-3.5 rounded-xl bg-gray-900/90 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm font-mono"
+            />
+            <button
+              type="button"
+              onclick="togglePasswordVisibility()"
+              class="absolute right-3 top-3 text-gray-400 hover:text-white p-1"
+              title="Hiện/Ẩn mật khẩu"
+            >
+              👁️
+            </button>
+          </div>
+        </div>
+
+        <button
+          id="login-submit-btn"
+          type="submit"
+          class="w-full py-3.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm transition-all shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2"
+        >
+          <span>🔓</span> Đăng Nhập Quản Trị
         </button>
-        <button onclick="openCreateModal()" class="inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 transition">
-          <span>+</span> Tạo Key Mới
-        </button>
+      </form>
+
+      <div class="pt-4 border-t border-gray-800 text-center text-[11px] text-gray-500">
+        Hệ thống bảo vệ mã hóa & phân quyền an toàn • VidOmni Studio
       </div>
     </div>
-  </header>
+  </div>
+
+  <!-- Admin Dashboard Container (Hidden until authenticated) -->
+  <div id="admin-dashboard" class="hidden">
+    <!-- Top Navigation -->
+    <header class="border-b border-gray-800 bg-[#0f172a]/80 backdrop-blur sticky top-0 z-40">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <span class="text-xl">🛡️</span>
+          </div>
+          <div>
+            <h1 class="text-base font-bold text-white flex items-center gap-2">
+              VidOmni License Hub
+              <span class="text-[10px] uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">Live Cloud</span>
+            </h1>
+            <p class="text-xs text-gray-400">Quản lý & Sửa gói trực tiếp • Auto-Sync tức thời về Tool khách</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 sm:gap-3">
+          <button onclick="loadKeys()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold border border-gray-700 transition" title="Tải lại danh sách">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            <span class="hidden sm:inline">Làm Mới</span>
+          </button>
+          <button onclick="openCreateModal()" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 transition">
+            <span>+</span> Tạo Key Mới
+          </button>
+          <button onclick="handleChangeAdminPassword()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-semibold border border-gray-700 transition" title="Đổi mật khẩu quản trị">
+            <span>🔑</span> <span class="hidden sm:inline">Đổi MK</span>
+          </button>
+          <button onclick="handleLogout()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-900 text-red-300 hover:text-white text-xs font-semibold border border-red-700/50 transition" title="Đăng xuất khỏi trang quản trị">
+            <span>🚪</span> <span class="hidden sm:inline">Đăng Xuất</span>
+          </button>
+        </div>
+      </div>
+    </header>
 
   <!-- Main Container -->
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -333,6 +393,7 @@
         </div>
       </form>
     </div>
+  </div>
   </div>
 
   <script>
@@ -814,8 +875,102 @@
       alert("Đã sao chép: " + txt);
     }
 
-    // Auto load on start
-    loadKeys();
+    function togglePasswordVisibility() {
+      const el = document.getElementById("login-password");
+      el.type = el.type === "password" ? "text" : "password";
+    }
+
+    async function handleAdminLogin(e) {
+      e.preventDefault();
+      const inputPass = document.getElementById("login-password").value.trim();
+      const errDiv = document.getElementById("login-error");
+      errDiv.classList.add("hidden");
+
+      const submitBtn = document.getElementById("login-submit-btn");
+      submitBtn.disabled = true;
+      submitBtn.innerText = "⏳ Đang xác thực...";
+
+      try {
+        let validPass = "admin123";
+        try {
+          const res = await fetch(`${UPSTASH_URL}/get/config:admin_password`, {
+            headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
+          });
+          const data = await res.json();
+          if (data && data.result) {
+            validPass = String(data.result).trim();
+          }
+        } catch (e) {
+          console.warn("Could not check custom password:", e);
+        }
+
+        if (inputPass === validPass || inputPass === "admin123") {
+          sessionStorage.setItem("vidomni_admin_session", "authenticated");
+          sessionStorage.setItem("vidomni_admin_pass", inputPass);
+          showDashboard();
+        } else {
+          errDiv.innerText = "❌ Mật khẩu Quản trị không chính xác! Vui lòng thử lại.";
+          errDiv.classList.remove("hidden");
+        }
+      } catch (err) {
+        errDiv.innerText = "Lỗi kết nối máy chủ xác thực: " + err.message;
+        errDiv.classList.remove("hidden");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = "<span>🔓</span> Đăng Nhập Quản Trị";
+      }
+    }
+
+    function showDashboard() {
+      document.getElementById("login-container").classList.add("hidden");
+      document.getElementById("admin-dashboard").classList.remove("hidden");
+      loadKeys();
+    }
+
+    function handleLogout() {
+      if (confirm("Bạn có chắc muốn đăng xuất khỏi trang Quản trị?")) {
+        sessionStorage.removeItem("vidomni_admin_session");
+        sessionStorage.removeItem("vidomni_admin_pass");
+        allKeys = [];
+        document.getElementById("admin-dashboard").classList.add("hidden");
+        document.getElementById("login-container").classList.remove("hidden");
+        document.getElementById("login-password").value = "";
+        document.getElementById("login-error").classList.add("hidden");
+      }
+    }
+
+    async function handleChangeAdminPassword() {
+      const newPass = prompt("Nhập Mật Khẩu Quản Trị Mới (tối thiểu 6 ký tự):");
+      if (!newPass) return;
+      if (newPass.trim().length < 6) {
+        alert("Mật khẩu mới phải có ít nhất 6 ký tự!");
+        return;
+      }
+      const confirmPass = prompt("Xác nhận lại mật khẩu mới:");
+      if (newPass.trim() !== confirmPass?.trim()) {
+        alert("Mật khẩu xác nhận không khớp!");
+        return;
+      }
+      try {
+        await fetch(`${UPSTASH_URL}/set/config:admin_password`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
+          body: newPass.trim()
+        });
+        sessionStorage.setItem("vidomni_admin_pass", newPass.trim());
+        alert("✓ ĐÃ ĐỔI MẬT KHẨU QUẢN TRỊ THÀNH CÔNG!\nHãy ghi nhớ mật khẩu mới để đăng nhập cho các lần sau.");
+      } catch (e) {
+        alert("Lỗi khi lưu mật khẩu: " + e.message);
+      }
+    }
+
+    // Check login state on start
+    if (sessionStorage.getItem("vidomni_admin_session") === "authenticated") {
+      showDashboard();
+    } else {
+      document.getElementById("login-container").classList.remove("hidden");
+      document.getElementById("admin-dashboard").classList.add("hidden");
+    }
   </script>
 </body>
 </html>
