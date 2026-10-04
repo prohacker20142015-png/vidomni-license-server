@@ -20,15 +20,38 @@ export async function POST(req: NextRequest) {
 
     let record = await getLicense(normalizedKey);
     if (!record) {
-      return NextResponse.json(
-        {
-          success: false,
-          valid: false,
-          status: 'NOT_FOUND',
-          message: 'Mã bản quyền không tồn tại hoặc đã bị xóa bởi Quản Trị Viên!',
-        },
-        { status: 404 }
-      );
+      const recovered = verifyCryptographicKey(normalizedKey, normalizedMid);
+      if (recovered) {
+        const nowIso = new Date().toISOString().replace('.000Z', 'Z');
+        const expiryEpoch = Math.floor(Date.now() / 1000) + recovered.durationDays * 86400;
+        record = {
+          key: normalizedKey,
+          tier: recovered.tier,
+          status: 'active',
+          duration_days: recovered.durationDays,
+          max_accounts: recovered.tier === 'vip' ? 50 : recovered.tier === 'pro' ? 10 : 3,
+          max_concurrent_jobs: recovered.tier === 'vip' ? 10 : recovered.tier === 'pro' ? 3 : 1,
+          notes: 'Tự động đồng bộ từ mã xác thực',
+          created_at: nowIso,
+          bound_machine_id: normalizedMid,
+          activated_at: nowIso,
+          expires_at: new Date(expiryEpoch * 1000).toISOString().replace('.000Z', 'Z'),
+          last_heartbeat: nowIso,
+          customer_email: (body.customer_email || body.email || '').trim() || undefined,
+          customer_phone: (body.customer_phone || body.phone || body.sdt || '').trim() || undefined,
+        };
+        await saveLicense(record);
+      } else {
+        return NextResponse.json(
+          {
+            success: false,
+            valid: false,
+            status: 'NOT_FOUND',
+            message: 'Mã bản quyền không tồn tại hoặc đã bị xóa bởi Quản Trị Viên!',
+          },
+          { status: 404 }
+        );
+      }
     }
 
     if (record.status === 'revoked') {

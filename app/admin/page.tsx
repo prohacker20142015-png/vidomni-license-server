@@ -22,6 +22,7 @@ import {
   Sparkles,
   Phone,
   Mail,
+  Crown,
 } from 'lucide-react';
 
 interface LicenseRecord {
@@ -284,6 +285,50 @@ export default function AdminPage() {
     }
   };
 
+  const handleTierChange = async (key: string, newTier: 'standard' | 'pro' | 'vip') => {
+    const activeToken = getAuthToken();
+    const upperKey = key.trim().toUpperCase();
+
+    // Optimistic UI updates
+    setKeys((prev) =>
+      prev.map((k) =>
+        k.key.toUpperCase() === upperKey
+          ? {
+              ...k,
+              tier: newTier,
+              max_accounts: newTier === 'vip' ? 100 : (newTier === 'pro' ? 20 : 1),
+              max_concurrent_jobs: newTier === 'vip' ? 50 : (newTier === 'pro' ? 10 : 5),
+            }
+          : k
+      )
+    );
+
+    try {
+      const res = await fetch('/api/admin/keys/action', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${activeToken}`,
+        },
+        body: JSON.stringify({
+          key: upperKey,
+          action: 'change_tier',
+          new_tier: newTier,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        alert(data.message || 'Lỗi đổi gói');
+      }
+    } catch (err: any) {
+      alert('Lỗi kết nối: ' + err.message);
+    } finally {
+      setTimeout(() => {
+        fetchKeys(activeToken);
+      }, 400);
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedKey(text);
@@ -499,17 +544,37 @@ export default function AdminPage() {
                     </td>
 
                     <td className="py-4 px-3">
-                      <span
-                        className={`text-xs px-2.5 py-1 rounded-full font-semibold uppercase ${
+                      <select
+                        value={item.tier}
+                        onChange={(e) => {
+                          const newTier = e.target.value as 'standard' | 'pro' | 'vip';
+                          if (
+                            confirm(
+                              `Đổi gói bản quyền cho key ${item.key}?\nTừ [${item.tier.toUpperCase()}] sang [${newTier.toUpperCase()}]\n\nTool máy khách sẽ tự động nâng cấp/hạ cấp sau vài giây!`
+                            )
+                          ) {
+                            handleTierChange(item.key, newTier);
+                          }
+                        }}
+                        className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase cursor-pointer outline-none border transition-all ${
                           item.tier === 'vip'
-                            ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                            ? 'bg-purple-900/60 text-purple-300 border-purple-500/40 hover:bg-purple-800/80'
                             : item.tier === 'pro'
-                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                            : 'bg-gray-700/50 text-gray-300'
+                            ? 'bg-blue-900/60 text-blue-300 border-blue-500/40 hover:bg-blue-800/80'
+                            : 'bg-amber-900/60 text-amber-300 border-amber-500/40 hover:bg-amber-800/80'
                         }`}
+                        title="Click để đổi trực tiếp: Standard / Pro / VIP"
                       >
-                        {item.tier}
-                      </span>
+                        <option value="standard" className="bg-gray-900 text-amber-300 font-semibold">
+                          STANDARD (1 Chrome / 5 Luồng)
+                        </option>
+                        <option value="pro" className="bg-gray-900 text-blue-300 font-semibold">
+                          PRO (20 Chrome / 10 Luồng)
+                        </option>
+                        <option value="vip" className="bg-gray-900 text-purple-300 font-semibold">
+                          VIP (100 Chrome / 50 Luồng)
+                        </option>
+                      </select>
                     </td>
 
                     <td className="py-4 px-3">
@@ -634,6 +699,24 @@ export default function AdminPage() {
                     </td>
 
                     <td className="py-4 px-6 text-right space-x-1">
+                      <button
+                        onClick={() => {
+                          const currentTier = item.tier;
+                          const nextTier = currentTier === 'standard' ? 'pro' : (currentTier === 'pro' ? 'vip' : 'standard');
+                          if (
+                            confirm(
+                              `Đổi gói cho key ${item.key}?\nTừ [${currentTier.toUpperCase()}] sang [${nextTier.toUpperCase()}]?\n\nTool máy khách sẽ tự động đồng bộ ngay!`
+                            )
+                          ) {
+                            handleTierChange(item.key, nextTier);
+                          }
+                        }}
+                        className="p-1.5 rounded-lg bg-gray-800 hover:bg-yellow-900/40 text-yellow-400 hover:text-yellow-300"
+                        title="Đổi / Nâng cấp gói nhanh (Standard -> Pro -> VIP)"
+                      >
+                        <Crown className="w-3.5 h-3.5" />
+                      </button>
+
                       {item.bound_machine_id && (
                         <button
                           onClick={() => {

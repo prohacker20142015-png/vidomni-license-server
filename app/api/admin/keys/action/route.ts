@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { key, action, days } = await req.json();
+    const { key, action, days, new_tier, max_accounts, max_concurrent_jobs } = await req.json();
 
     if (!key || !action) {
       return NextResponse.json({ success: false, message: 'Missing key or action' }, { status: 400 });
@@ -54,6 +54,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         message: `Đã reset Machine ID cho key ${normalizedKey}. Khách hàng có thể kích hoạt trên máy mới!`,
+      });
+    }
+
+    if (action === 'change_tier') {
+      const targetTier = String(new_tier || '').toLowerCase().trim();
+      if (!['standard', 'pro', 'vip'].includes(targetTier)) {
+        return NextResponse.json({ success: false, message: 'Gói bản quyền không hợp lệ (standard, pro, vip)' }, { status: 400 });
+      }
+
+      record.tier = targetTier as any;
+
+      if (max_accounts !== undefined && max_accounts !== null && !isNaN(parseInt(max_accounts, 10))) {
+        record.max_accounts = parseInt(max_accounts, 10);
+      } else {
+        record.max_accounts = targetTier === 'vip' ? 100 : (targetTier === 'pro' ? 20 : 1);
+      }
+
+      if (max_concurrent_jobs !== undefined && max_concurrent_jobs !== null && !isNaN(parseInt(max_concurrent_jobs, 10))) {
+        record.max_concurrent_jobs = parseInt(max_concurrent_jobs, 10);
+      } else {
+        record.max_concurrent_jobs = targetTier === 'vip' ? 50 : (targetTier === 'pro' ? 10 : 5);
+      }
+
+      await saveLicense(record);
+      return NextResponse.json({
+        success: true,
+        message: `Đã đổi gói sang [${targetTier.toUpperCase()}] thành công! Tool khách hàng sẽ tự động đồng bộ ngay lập tức.`,
+        record,
       });
     }
 

@@ -1,10 +1,13 @@
 /**
  * lib/db.ts - Multi-tier Persistent Storage:
- * 1. Upstash Redis (if UPSTASH_REDIS_REST_URL configured)
- * 2. Vercel Blob Cloud Storage (if BLOB_READ_WRITE_TOKEN configured)
- * 3. Local filesystem store (.data/licenses.json or /tmp/licenses.json)
+ * 1. Google Firebase Firestore (if FIREBASE_PROJECT_ID / Google Cloud configured - 50K free reads/day)
+ * 2. Upstash Redis (if UPSTASH_REDIS_REST_URL configured - 10K free ops/day)
+ * 3. Vercel Blob Cloud Storage (fallback only if BLOB_READ_WRITE_TOKEN configured)
+ * 4. Local filesystem store (.data/licenses.json or /tmp/licenses.json)
  */
 
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { Redis } from '@upstash/redis';
 import { put, list, del } from '@vercel/blob';
 import fs from 'fs';
@@ -27,10 +30,39 @@ export interface LicenseRecord {
   customer_phone?: string | null;
 }
 
-// 1. Initialize Upstash Redis if environment variables are provided
+// 1. Initialize Google Firebase Firestore if available
+let firestoreDb: Firestore | null = null;
+const firebaseProjectId = process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT;
+if (firebaseProjectId || process.env.FIREBASE_CONFIG || process.env.FIREBASE_SERVICE_ACCOUNT) {
+  try {
+    if (getApps().length === 0) {
+      if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+        try {
+          const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+          initializeApp({ credential: cert(sa), projectId: firebaseProjectId || sa.project_id });
+        } catch {
+          initializeApp(firebaseProjectId ? { projectId: firebaseProjectId } : undefined);
+        }
+      } else {
+        initializeApp(firebaseProjectId ? { projectId: firebaseProjectId } : undefined);
+      }
+    }
+    firestoreDb = getFirestore();
+  } catch (err) {
+    console.warn('[DB] Failed to initialize Firebase Firestore:', err);
+  }
+}
+
+// 2. Initialize Upstash Redis if environment variables are provided
 let redisClient: Redis | null = null;
-const redisUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+const redisUrl =
+  process.env.UPSTASH_REDIS_REST_URL ||
+  process.env.KV_REST_API_URL ||
+  'https://select-wahoo-44785.upstash.io';
+const redisToken =
+  process.env.UPSTASH_REDIS_REST_TOKEN ||
+  process.env.KV_REST_API_TOKEN ||
+  'Aa7xAAIgcDEyMjI3ODQ5YTg4MTE0OTQwODI1MDhmY2JlNjA5MDU5YQ';
 
 if (redisUrl && redisToken) {
   try {
@@ -43,8 +75,21 @@ if (redisUrl && redisToken) {
   }
 }
 
+import seedLicenses from './seed_licenses.json';
+
+// Helper to provide bundled client licenses
+function getSeedStore(): Record<string, LicenseRecord> {
+  const store: Record<string, LicenseRecord> = {};
+  for (const item of (seedLicenses as unknown as LicenseRecord[])) {
+    if (item && item.key) {
+      store[item.key.trim().toUpperCase()] = item;
+    }
+  }
+  return store;
+}
+
 // 2. In-memory and local fallback cache
-let memoryStore: Record<string, LicenseRecord> = {};
+let memoryStore: Record<string, LicenseRecord> = getSeedStore();
 let lastBlobSync = 0;
 const BLOB_FILENAME = 'vidomni_licenses.json';
 
@@ -65,15 +110,17 @@ function getStoreFilePath(): string {
 
 function readLocalDiskStore(): Record<string, LicenseRecord> {
   const filePath = getStoreFilePath();
+  const baseStore = getSeedStore();
   try {
     if (fs.existsSync(filePath)) {
       const data = fs.readFileSync(filePath, 'utf8');
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      return { ...baseStore, ...parsed };
     }
   } catch (err) {
     console.error('[DB] Error reading local store file:', err);
   }
-  return {};
+  return baseStore;
 }
 
 function writeLocalDiskStore(store: Record<string, LicenseRecord>) {
@@ -185,7 +232,19 @@ async function persistToBlob(store: Record<string, LicenseRecord>): Promise<void
 export async function getLicense(key: string): Promise<LicenseRecord | null> {
   const normalizedKey = key.trim().toUpperCase();
 
-  // 1. Upstash Redis
+  // 1. Google Firebase Firestore (50K free reads/day)
+  if (firestoreDb) {
+    try {
+      const doc = await firestoreDb.collection('licenses').doc(normalizedKey).get();
+      if (doc.exists) {
+        return doc.data() as LicenseRecord;
+      }
+    } catch (err) {
+      console.error('[DB] Firestore get error:', err);
+    }
+  }
+
+  // 2. Upstash Redis
   if (redisClient) {
     try {
       const record = await redisClient.get<LicenseRecord>(`license:${normalizedKey}`);
@@ -195,7 +254,7 @@ export async function getLicense(key: string): Promise<LicenseRecord | null> {
     }
   }
 
-  // 2. Vercel Blob
+  // 3. Vercel Blob
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     const store = await syncFromBlob(true);
     for (const k of Object.keys(store)) {
@@ -206,7 +265,7 @@ export async function getLicense(key: string): Promise<LicenseRecord | null> {
     return null;
   }
 
-  // 3. Local disk fallback
+  // 4. Local disk fallback
   if (memoryStore[normalizedKey]) {
     return memoryStore[normalizedKey];
   }
@@ -219,7 +278,16 @@ export async function saveLicense(record: LicenseRecord): Promise<void> {
   const normalizedKey = record.key.trim().toUpperCase();
   record.key = normalizedKey;
 
-  // 1. Upstash Redis
+  // 1. Google Firebase Firestore (20K free writes/day = 600K/month!)
+  if (firestoreDb) {
+    try {
+      await firestoreDb.collection('licenses').doc(normalizedKey).set(record);
+    } catch (err) {
+      console.error('[DB] Firestore save error:', err);
+    }
+  }
+
+  // 2. Upstash Redis
   if (redisClient) {
     try {
       await redisClient.set(`license:${normalizedKey}`, record);
@@ -229,8 +297,8 @@ export async function saveLicense(record: LicenseRecord): Promise<void> {
     }
   }
 
-  // 2. Vercel Blob Cloud
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
+  // 3. Vercel Blob Cloud (only if Firestore and Redis are not present to avoid burning blob quota)
+  if (!firestoreDb && !redisClient && process.env.BLOB_READ_WRITE_TOKEN) {
     const store = await syncFromBlob(true);
     store[normalizedKey] = record;
     memoryStore = store;
@@ -238,7 +306,7 @@ export async function saveLicense(record: LicenseRecord): Promise<void> {
     await persistToBlob(memoryStore);
   }
 
-  // 3. Local memory & disk
+  // 4. Local memory & disk
   memoryStore[normalizedKey] = record;
   writeLocalDiskStore(memoryStore);
 }
@@ -246,7 +314,16 @@ export async function saveLicense(record: LicenseRecord): Promise<void> {
 export async function deleteLicense(key: string): Promise<boolean> {
   const normalizedKey = key.trim().toUpperCase();
 
-  // 1. Upstash Redis
+  // 1. Google Firebase Firestore
+  if (firestoreDb) {
+    try {
+      await firestoreDb.collection('licenses').doc(normalizedKey).delete();
+    } catch (err) {
+      console.error('[DB] Firestore delete error:', err);
+    }
+  }
+
+  // 2. Upstash Redis
   if (redisClient) {
     try {
       await redisClient.del(`license:${normalizedKey}`);
@@ -256,8 +333,8 @@ export async function deleteLicense(key: string): Promise<boolean> {
     }
   }
 
-  // 2. Vercel Blob Cloud
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
+  // 3. Vercel Blob Cloud
+  if (!firestoreDb && !redisClient && process.env.BLOB_READ_WRITE_TOKEN) {
     try {
       const store = await syncFromBlob(true);
       for (const k of Object.keys(store)) {
@@ -273,7 +350,7 @@ export async function deleteLicense(key: string): Promise<boolean> {
     }
   }
 
-  // 3. Local memory & disk
+  // 4. Local memory & disk
   for (const k of Object.keys(memoryStore)) {
     if (k.trim().toUpperCase() === normalizedKey) {
       delete memoryStore[k];
@@ -291,7 +368,19 @@ export async function deleteLicense(key: string): Promise<boolean> {
 }
 
 export async function listLicenses(): Promise<LicenseRecord[]> {
-  // 1. Upstash Redis
+  // 1. Google Firebase Firestore
+  if (firestoreDb) {
+    try {
+      const snapshot = await firestoreDb.collection('licenses').get();
+      if (!snapshot.empty) {
+        return snapshot.docs.map((doc) => doc.data() as LicenseRecord);
+      }
+    } catch (err) {
+      console.error('[DB] Firestore list error:', err);
+    }
+  }
+
+  // 2. Upstash Redis
   if (redisClient) {
     try {
       const keys = await redisClient.smembers('licenses:index');
@@ -309,13 +398,13 @@ export async function listLicenses(): Promise<LicenseRecord[]> {
     }
   }
 
-  // 2. Vercel Blob Cloud
+  // 3. Vercel Blob Cloud
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     const store = await syncFromBlob(true);
     return Object.values(store).filter((r): r is LicenseRecord => Boolean(r && r.key && typeof r.key === 'string'));
   }
 
-  // 3. Local disk fallback
+  // 4. Local disk fallback
   const diskStore = readLocalDiskStore();
   memoryStore = { ...memoryStore, ...diskStore };
   return Object.values(memoryStore).filter((r): r is LicenseRecord => Boolean(r && r.key && typeof r.key === 'string'));
