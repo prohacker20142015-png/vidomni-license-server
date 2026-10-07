@@ -403,6 +403,50 @@
     const UPSTASH_TOKEN = "Aa7xAAIgcDEyMjI3ODQ5YTg4MTE0OTQwODI1MDhmY2JlNjA5MDU5YQ";
     let allKeys = [];
 
+    const VERCEL_API_URL = "https://vidomni-license-server.vercel.app";
+
+    async function syncToVercel(key, record) {
+      if (!key) return;
+      try {
+        const uKey = key.trim().toUpperCase();
+        if (record) {
+          const recObj = typeof record === "string" ? JSON.parse(record) : record;
+          await fetch(`${VERCEL_API_URL}/api/admin/keys`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${ADMIN_PASS}`
+            },
+            body: JSON.stringify({
+              custom_key: uKey,
+              tier: recObj.tier || "pro",
+              duration_days: recObj.duration_days || 30,
+              max_accounts: recObj.max_accounts || (recObj.tier === "standard" ? 1 : (recObj.tier === "pro" ? 20 : 100)),
+              max_concurrent_jobs: recObj.max_concurrent_jobs || (recObj.tier === "standard" ? 5 : (recObj.tier === "pro" ? 10 : 50)),
+              notes: recObj.notes || "",
+              machine_id: recObj.bound_machine_id || "",
+              customer_phone: recObj.customer_phone || "",
+              customer_email: recObj.customer_email || ""
+            })
+          });
+        } else {
+          await fetch(`${VERCEL_API_URL}/api/admin/keys/action`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${ADMIN_PASS}`
+            },
+            body: JSON.stringify({
+              key: uKey,
+              action: "delete"
+            })
+          });
+        }
+      } catch (e) {
+        console.warn("Vercel sync warning:", e);
+      }
+    }
+
     async function syncToUpstash(key, record) {
       if (!key) return;
       try {
@@ -416,6 +460,7 @@
           await fetch(`${UPSTASH_URL}/sadd/licenses:index/${uKey}`, {
             headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
           });
+          syncToVercel(uKey, record).catch(() => {});
         } else {
           await fetch(`${UPSTASH_URL}/del/license:${uKey}`, {
             headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
@@ -423,6 +468,7 @@
           await fetch(`${UPSTASH_URL}/srem/licenses:index/${uKey}`, {
             headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
           });
+          syncToVercel(uKey, null).catch(() => {});
         }
       } catch (e) {
         console.warn("Upstash sync warning:", e);

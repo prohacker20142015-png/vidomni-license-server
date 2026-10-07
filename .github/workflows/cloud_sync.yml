@@ -1,0 +1,31 @@
+name: VidOmni 24/7 Cloud License Sync & Keepalive
+
+on:
+  schedule:
+    # Run every 10 minutes to prevent Vercel cold wipes and keep database 100% matched
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - gh-pages
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install requests
+
+      - name: Run 2-way Cloud Sync & Heartbeat
+        run: |
+          python cloud_sync.py

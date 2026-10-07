@@ -247,8 +247,18 @@ export async function getLicense(key: string): Promise<LicenseRecord | null> {
   // 2. Upstash Redis
   if (redisClient) {
     try {
-      const record = await redisClient.get<LicenseRecord>(`license:${normalizedKey}`);
-      return record || null;
+      const record = await redisClient.get<any>(`license:${normalizedKey}`);
+      if (record) {
+        if (typeof record === 'string') {
+          try {
+            return JSON.parse(record) as LicenseRecord;
+          } catch {
+            return null;
+          }
+        }
+        return record as LicenseRecord;
+      }
+      return null;
     } catch (err) {
       console.error('[DB] Redis get error:', err);
     }
@@ -383,16 +393,36 @@ export async function listLicenses(): Promise<LicenseRecord[]> {
   // 2. Upstash Redis
   if (redisClient) {
     try {
-      const keys = await redisClient.smembers('licenses:index');
-      if (keys && keys.length > 0) {
-        const pipeline = redisClient.pipeline();
-        for (const k of keys) {
-          pipeline.get(`license:${k}`);
-        }
-        const records = (await pipeline.exec()) as (LicenseRecord | null)[];
-        return records.filter((r): r is LicenseRecord => r !== null);
+      const indexKeys: string[] = (await redisClient.smembers('licenses:index')) || [];
+      const scanKeys: string[] = (await redisClient.keys('license:*')) || [];
+      const keySet = new Set<string>();
+      for (const k of indexKeys) {
+        if (k) keySet.add(String(k).trim().toUpperCase());
       }
-      return [];
+      for (const k of scanKeys) {
+        if (k) keySet.add(String(k).replace(/^license:/i, '').trim().toUpperCase());
+      }
+      const keyList = Array.from(keySet);
+      if (keyList.length > 0) {
+        const pipeline = redisClient.pipeline();
+        for (let i = 0; i < keyList.length; i++) {
+          pipeline.get(`license:${keyList[i]}`);
+        }
+        const rawRecords = (await pipeline.exec()) || [];
+        const records: LicenseRecord[] = [];
+        for (const r of rawRecords) {
+          if (!r) continue;
+          try {
+            const parsed = typeof r === 'string' ? JSON.parse(r) : r;
+            if (parsed && parsed.key) {
+              records.push(parsed as LicenseRecord);
+            }
+          } catch {}
+        }
+        if (records.length > 0) {
+          return records;
+        }
+      }
     } catch (err) {
       console.error('[DB] Redis list error:', err);
     }
