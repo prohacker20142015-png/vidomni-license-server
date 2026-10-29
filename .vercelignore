@@ -1,0 +1,10 @@
+.firebase
+.firebase/
+.next
+.next/
+node_modules
+node_modules/
+.git
+.git/
+*.py
+*.bat

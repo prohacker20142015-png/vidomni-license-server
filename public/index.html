@@ -164,7 +164,7 @@
           <span class="absolute left-3 top-2.5 text-gray-500 text-xs">🔍</span>
         </div>
         <div class="text-xs text-gray-400">
-          Máy chủ: <code class="text-blue-400">https://vidomni-license-server.vercel.app</code>
+          Máy chủ: <span class="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold">🟢 Upstash Cloud Database • Lưu trữ vĩnh viễn 100%</span>
         </div>
       </div>
 
@@ -397,21 +397,39 @@
   </div>
 
   <script>
-    const SERVER_URL = "https://vavaw-1a44d.web.app";
+    const SERVER_URL = "https://vidomni-license-server.vercel.app";
+    const FIREBASE_RTDB_URL = "https://vps123-ff296-default-rtdb.firebaseio.com";
     const ADMIN_PASS = "admin123";
     const UPSTASH_URL = "https://select-wahoo-44785.upstash.io";
     const UPSTASH_TOKEN = "Aa7xAAIgcDEyMjI3ODQ5YTg4MTE0OTQwODI1MDhmY2JlNjA5MDU5YQ";
     let allKeys = [];
 
-    const VERCEL_API_URL = "https://vidomni-license-server.vercel.app";
-
-    async function syncToVercel(key, record) {
+    async function syncToUpstash(key, record) {
       if (!key) return;
+      const uKey = key.trim().toUpperCase();
+      const objRecord = typeof record === "string" ? JSON.parse(record) : record;
+
+      // 1. Đồng bộ ngay lên Google Firebase Realtime Database (Không giới hạn request, siêu tốc)
       try {
-        const uKey = key.trim().toUpperCase();
-        if (record) {
-          const recObj = typeof record === "string" ? JSON.parse(record) : record;
-          await fetch(`${VERCEL_API_URL}/api/admin/keys`, {
+        if (objRecord) {
+          await fetch(`${FIREBASE_RTDB_URL}/vidomni_licenses/${encodeURIComponent(uKey)}.json`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(objRecord)
+          });
+        } else {
+          await fetch(`${FIREBASE_RTDB_URL}/vidomni_licenses/${encodeURIComponent(uKey)}.json`, {
+            method: "DELETE"
+          });
+        }
+      } catch (e) {
+        console.warn("Firebase RTDB sync warning:", e);
+      }
+
+      // 2. Đồng bộ sang máy chủ Vercel Serverless (https://vidomni-license-server.vercel.app)
+      try {
+        if (objRecord) {
+          await fetch(`${SERVER_URL}/api/admin/keys`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -419,113 +437,105 @@
             },
             body: JSON.stringify({
               custom_key: uKey,
-              tier: recObj.tier || "pro",
-              duration_days: recObj.duration_days || 30,
-              max_accounts: recObj.max_accounts || (recObj.tier === "standard" ? 1 : (recObj.tier === "pro" ? 20 : 100)),
-              max_concurrent_jobs: recObj.max_concurrent_jobs || (recObj.tier === "standard" ? 5 : (recObj.tier === "pro" ? 10 : 50)),
-              notes: recObj.notes || "",
-              machine_id: recObj.bound_machine_id || "",
-              customer_phone: recObj.customer_phone || "",
-              customer_email: recObj.customer_email || ""
+              tier: objRecord.tier || "pro",
+              duration_days: objRecord.duration_days || 30,
+              max_accounts: objRecord.max_accounts || 20,
+              max_concurrent_jobs: objRecord.max_concurrent_jobs || 10,
+              machine_id: objRecord.bound_machine_id || "",
+              customer_phone: objRecord.customer_phone || "",
+              customer_email: objRecord.customer_email || "",
+              notes: objRecord.notes || ""
             })
           });
         } else {
-          await fetch(`${VERCEL_API_URL}/api/admin/keys/action`, {
+          await fetch(`${SERVER_URL}/api/admin/keys/action`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${ADMIN_PASS}`
             },
-            body: JSON.stringify({
-              key: uKey,
-              action: "delete"
-            })
+            body: JSON.stringify({ key: uKey, action: "delete" })
           });
         }
       } catch (e) {
         console.warn("Vercel sync warning:", e);
       }
-    }
 
-    async function syncToUpstash(key, record) {
-      if (!key) return;
+      // 3. Đồng bộ dự phòng lên Upstash (nếu còn hạn mức)
       try {
-        const uKey = key.trim().toUpperCase();
-        if (record) {
-          await fetch(`${UPSTASH_URL}/set/license:${uKey}`, {
+        if (objRecord) {
+          fetch(`${UPSTASH_URL}/set/license:${uKey}`, {
             method: "POST",
             headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
-            body: typeof record === "string" ? record : JSON.stringify(record)
-          });
-          await fetch(`${UPSTASH_URL}/sadd/licenses:index/${uKey}`, {
+            body: JSON.stringify(objRecord)
+          }).catch(() => {});
+          fetch(`${UPSTASH_URL}/sadd/licenses:index/${uKey}`, {
             headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
-          });
-          syncToVercel(uKey, record).catch(() => {});
+          }).catch(() => {});
         } else {
-          await fetch(`${UPSTASH_URL}/del/license:${uKey}`, {
+          fetch(`${UPSTASH_URL}/del/license:${uKey}`, {
             headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
-          });
-          await fetch(`${UPSTASH_URL}/srem/licenses:index/${uKey}`, {
+          }).catch(() => {});
+          fetch(`${UPSTASH_URL}/srem/licenses:index/${uKey}`, {
             headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
-          });
-          syncToVercel(uKey, null).catch(() => {});
+          }).catch(() => {});
         }
-      } catch (e) {
-        console.warn("Upstash sync warning:", e);
-      }
+      } catch (e) {}
     }
 
     async function loadKeys() {
-      document.getElementById("key-tbody").innerHTML = `<tr><td colspan="7" class="py-8 text-center text-blue-400 font-semibold animate-pulse">⏳ Đang tải dữ liệu từ Cloud Edge Database...</td></tr>`;
-      
-      let loadedFromUpstash = false;
+      document.getElementById("key-tbody").innerHTML = `<tr><td colspan="7" class="py-8 text-center text-blue-400 font-semibold animate-pulse">⏳ Đang tải dữ liệu từ Cloud Database (Firebase + Vercel)...</td></tr>`;
+
+      const keyMap = {};
+
+      // 1. Tải từ Google Firebase Realtime Database
       try {
-        const indexRes = await fetch(`${UPSTASH_URL}/smembers/licenses:index`, {
-          headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
+        const fbRes = await fetch(`${FIREBASE_RTDB_URL}/vidomni_licenses.json?t=${Date.now()}`, {
+          cache: "no-store"
         });
-        const indexData = await indexRes.json();
-        const keysList = indexData.result || [];
-        
-        if (keysList.length > 0) {
-          const pipelineCmds = keysList.map(k => ["get", `license:${k}`]);
-          const pipeRes = await fetch(`${UPSTASH_URL}/pipeline`, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${UPSTASH_TOKEN}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify(pipelineCmds)
-          });
-          const pipeData = await pipeRes.json();
-          const records = [];
-          for (const item of pipeData) {
-            if (item && item.result) {
-              try {
-                const rec = typeof item.result === "string" ? JSON.parse(item.result) : item.result;
-                if (rec && rec.key) records.push(rec);
-              } catch (e) {}
+        if (fbRes.ok) {
+          const fbData = await fbRes.json();
+          if (fbData && typeof fbData === "object") {
+            for (const [k, rec] of Object.entries(fbData)) {
+              if (rec && typeof rec === "object" && rec.key) {
+                keyMap[rec.key.trim().toUpperCase()] = rec;
+              }
             }
           }
-          if (records.length > 0) {
-            // Sắp xếp key mới nhất lên đầu
-            records.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-            allKeys = records;
-            updateStatsFromKeys(records);
-            renderTable();
-            loadedFromUpstash = true;
-          }
-        } else {
-          allKeys = [];
-          updateStatsFromKeys([]);
-          renderTable();
-          loadedFromUpstash = true;
         }
       } catch (err) {
-        console.warn("Upstash read error:", err);
-        if (!loadedFromUpstash) {
-          document.getElementById("key-tbody").innerHTML = `<tr><td colspan="7" class="py-8 text-center text-red-400 font-semibold">Lỗi kết nối tới Cloud Edge Database: ${err.message}</td></tr>`;
-        }
+        console.warn("Firebase RTDB read warning:", err);
       }
+
+      // 2. Tải bổ sung & hợp nhất từ Vercel License Server
+      try {
+        const verRes = await fetch(`${SERVER_URL}/api/admin/keys?t=${Date.now()}`, {
+          headers: { Authorization: `Bearer ${ADMIN_PASS}` },
+          cache: "no-store"
+        });
+        if (verRes.ok) {
+          const verData = await verRes.json();
+          const verKeys = verData.keys || [];
+          for (const rec of verKeys) {
+            if (rec && rec.key) {
+              const uk = rec.key.trim().toUpperCase();
+              if (!keyMap[uk]) {
+                keyMap[uk] = rec;
+              } else if (rec.bound_machine_id && !keyMap[uk].bound_machine_id) {
+                keyMap[uk] = { ...keyMap[uk], ...rec };
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Vercel read warning:", err);
+      }
+
+      const records = Object.values(keyMap);
+      records.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+      allKeys = records;
+      updateStatsFromKeys(records);
+      renderTable();
     }
 
     function updateStatsFromKeys(keys) {
@@ -939,12 +949,10 @@
       try {
         let validPass = "admin123";
         try {
-          const res = await fetch(`${UPSTASH_URL}/get/config:admin_password`, {
-            headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
-          });
+          const res = await fetch(`${FIREBASE_RTDB_URL}/vidomni_config/admin_password.json`);
           const data = await res.json();
-          if (data && data.result) {
-            validPass = String(data.result).trim();
+          if (data && typeof data === "string" && data.trim()) {
+            validPass = data.trim();
           }
         } catch (e) {
           console.warn("Could not check custom password:", e);
@@ -998,10 +1006,10 @@
         return;
       }
       try {
-        await fetch(`${UPSTASH_URL}/set/config:admin_password`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
-          body: newPass.trim()
+        await fetch(`${FIREBASE_RTDB_URL}/vidomni_config/admin_password.json`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newPass.trim())
         });
         sessionStorage.setItem("vidomni_admin_pass", newPass.trim());
         alert("✓ ĐÃ ĐỔI MẬT KHẨU QUẢN TRỊ THÀNH CÔNG!\nHãy ghi nhớ mật khẩu mới để đăng nhập cho các lần sau.");

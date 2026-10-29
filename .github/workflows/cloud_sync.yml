@@ -2,8 +2,8 @@ name: VidOmni 24/7 Cloud License Sync & Keepalive
 
 on:
   schedule:
-    # Run every 10 minutes to prevent Vercel cold wipes and keep database 100% matched
-    - cron: '*/10 * * * *'
+    # Run every 5 minutes to prevent Vercel cold wipes and keep database 100% matched
+    - cron: '*/5 * * * *'
   workflow_dispatch:
   push:
     branches:

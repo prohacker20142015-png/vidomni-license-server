@@ -58,13 +58,13 @@ let redisClient: Redis | null = null;
 const redisUrl =
   process.env.UPSTASH_REDIS_REST_URL ||
   process.env.KV_REST_API_URL ||
-  'https://select-wahoo-44785.upstash.io';
+  '';
 const redisToken =
   process.env.UPSTASH_REDIS_REST_TOKEN ||
   process.env.KV_REST_API_TOKEN ||
   'Aa7xAAIgcDEyMjI3ODQ5YTg4MTE0OTQwODI1MDhmY2JlNjA5MDU5YQ';
 
-if (redisUrl && redisToken) {
+if (redisUrl && redisToken && !redisUrl.includes('select-wahoo-44785')) {
   try {
     redisClient = new Redis({
       url: redisUrl,
@@ -226,11 +226,33 @@ async function persistToBlob(store: Record<string, LicenseRecord>): Promise<void
 }
 
 // ============================================================================
-// Database Operations
+// Database Operations (Primary: Firebase Realtime DB + Firestore + Redis + Blob)
 // ============================================================================
+
+const FIREBASE_RTDB_URL = (
+  process.env.FIREBASE_RTDB_URL || 'https://vps123-ff296-default-rtdb.firebaseio.com'
+).replace(/\/+$/, '');
 
 export async function getLicense(key: string): Promise<LicenseRecord | null> {
   const normalizedKey = key.trim().toUpperCase();
+
+  // 0. Google Firebase Realtime Database (Fast, unlimited request count, zero cold-start loss)
+  if (FIREBASE_RTDB_URL) {
+    try {
+      const res = await fetch(
+        `${FIREBASE_RTDB_URL}/vidomni_licenses/${encodeURIComponent(normalizedKey)}.json`,
+        { cache: 'no-store' }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data && typeof data === 'object' && data.key) {
+          return data as LicenseRecord;
+        }
+      }
+    } catch (err) {
+      console.error('[DB] Firebase RTDB get error:', err);
+    }
+  }
 
   // 1. Google Firebase Firestore (50K free reads/day)
   if (firestoreDb) {
@@ -258,7 +280,6 @@ export async function getLicense(key: string): Promise<LicenseRecord | null> {
         }
         return record as LicenseRecord;
       }
-      return null;
     } catch (err) {
       console.error('[DB] Redis get error:', err);
     }
@@ -288,10 +309,32 @@ export async function saveLicense(record: LicenseRecord): Promise<void> {
   const normalizedKey = record.key.trim().toUpperCase();
   record.key = normalizedKey;
 
+  let savedToCloud = false;
+
+  // 0. Google Firebase Realtime Database
+  if (FIREBASE_RTDB_URL) {
+    try {
+      const res = await fetch(
+        `${FIREBASE_RTDB_URL}/vidomni_licenses/${encodeURIComponent(normalizedKey)}.json`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(record),
+        }
+      );
+      if (res.ok) {
+        savedToCloud = true;
+      }
+    } catch (err) {
+      console.error('[DB] Firebase RTDB save error:', err);
+    }
+  }
+
   // 1. Google Firebase Firestore (20K free writes/day = 600K/month!)
   if (firestoreDb) {
     try {
       await firestoreDb.collection('licenses').doc(normalizedKey).set(record);
+      savedToCloud = true;
     } catch (err) {
       console.error('[DB] Firestore save error:', err);
     }
@@ -302,13 +345,14 @@ export async function saveLicense(record: LicenseRecord): Promise<void> {
     try {
       await redisClient.set(`license:${normalizedKey}`, record);
       await redisClient.sadd('licenses:index', normalizedKey);
+      savedToCloud = true;
     } catch (err) {
       console.error('[DB] Redis save error:', err);
     }
   }
 
-  // 3. Vercel Blob Cloud (only if Firestore and Redis are not present to avoid burning blob quota)
-  if (!firestoreDb && !redisClient && process.env.BLOB_READ_WRITE_TOKEN) {
+  // 3. Vercel Blob Cloud (fallback if primary cloud stores fail or when configured)
+  if (!savedToCloud && process.env.BLOB_READ_WRITE_TOKEN) {
     const store = await syncFromBlob(true);
     store[normalizedKey] = record;
     memoryStore = store;
@@ -324,10 +368,28 @@ export async function saveLicense(record: LicenseRecord): Promise<void> {
 export async function deleteLicense(key: string): Promise<boolean> {
   const normalizedKey = key.trim().toUpperCase();
 
+  let deletedFromCloud = false;
+
+  // 0. Google Firebase Realtime Database
+  if (FIREBASE_RTDB_URL) {
+    try {
+      const res = await fetch(
+        `${FIREBASE_RTDB_URL}/vidomni_licenses/${encodeURIComponent(normalizedKey)}.json`,
+        { method: 'DELETE' }
+      );
+      if (res.ok) {
+        deletedFromCloud = true;
+      }
+    } catch (err) {
+      console.error('[DB] Firebase RTDB delete error:', err);
+    }
+  }
+
   // 1. Google Firebase Firestore
   if (firestoreDb) {
     try {
       await firestoreDb.collection('licenses').doc(normalizedKey).delete();
+      deletedFromCloud = true;
     } catch (err) {
       console.error('[DB] Firestore delete error:', err);
     }
@@ -338,13 +400,14 @@ export async function deleteLicense(key: string): Promise<boolean> {
     try {
       await redisClient.del(`license:${normalizedKey}`);
       await redisClient.srem('licenses:index', normalizedKey);
+      deletedFromCloud = true;
     } catch (err) {
       console.error('[DB] Redis delete error:', err);
     }
   }
 
   // 3. Vercel Blob Cloud
-  if (!firestoreDb && !redisClient && process.env.BLOB_READ_WRITE_TOKEN) {
+  if (!deletedFromCloud && process.env.BLOB_READ_WRITE_TOKEN) {
     try {
       const store = await syncFromBlob(true);
       for (const k of Object.keys(store)) {
@@ -378,6 +441,28 @@ export async function deleteLicense(key: string): Promise<boolean> {
 }
 
 export async function listLicenses(): Promise<LicenseRecord[]> {
+  // 0. Google Firebase Realtime Database
+  if (FIREBASE_RTDB_URL) {
+    try {
+      const res = await fetch(`${FIREBASE_RTDB_URL}/vidomni_licenses.json`, {
+        cache: 'no-store',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && typeof data === 'object') {
+          const list = Object.values(data).filter(
+            (r: any): r is LicenseRecord => Boolean(r && r.key && typeof r.key === 'string')
+          );
+          if (list.length > 0) {
+            return list;
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[DB] Firebase RTDB list error:', err);
+    }
+  }
+
   // 1. Google Firebase Firestore
   if (firestoreDb) {
     try {

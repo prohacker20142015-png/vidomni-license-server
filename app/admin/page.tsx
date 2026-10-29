@@ -299,11 +299,9 @@ export default function AdminPage() {
           customer_phone: editForm.customer_phone || '',
           customer_email: editForm.customer_email || '',
         };
-        fetch(`https://select-wahoo-44785.upstash.io/set/license:${upperKey}`, {
-          method: 'POST',
-          headers: {
-            Authorization: 'Bearer Aa7xAAIgcDEyMjI3ODQ5YTg4MTE0OTQwODI1MDhmY2JlNjA5MDU5YQ',
-          },
+        fetch(`https://vps123-ff296-default-rtdb.firebaseio.com/vidomni_licenses/${encodeURIComponent(upperKey)}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(upstashRec),
         }).catch(() => {});
       } catch {}
